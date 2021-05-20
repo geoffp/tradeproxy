@@ -11,7 +11,7 @@ const EMAIL_TOKEN: &str = "***REMOVED***";
 const BOT_ID: u64 = ***REMOVED***;
 
 #[derive(Deserialize, Serialize, Debug)]
-pub struct Json {
+pub struct RequestBody {
     pub message_type: &'static str,
     pub bot_id: u64,
     pub email_token: &'static str,
@@ -20,9 +20,9 @@ pub struct Json {
     pub action: Option<&'static str>,
 }
 
-impl Json {
-    fn new(action: DealAction) -> Json {
-        Json {
+impl RequestBody {
+    fn new(action: DealAction) -> RequestBody {
+        RequestBody {
             message_type: "bot",
             bot_id: BOT_ID,
             email_token: EMAIL_TOKEN,
@@ -32,6 +32,14 @@ impl Json {
                 DealAction::Close => Some("close_at_market_price"),
             },
         }
+    }
+
+    fn start() -> RequestBody {
+        RequestBody::new(DealAction::Start)
+    }
+
+    fn close() -> RequestBody {
+        RequestBody::new(DealAction::Close)
     }
 }
 
@@ -50,7 +58,7 @@ mod tests {
     #[test]
     fn start_json_is_correct() {
         assert_eq!(
-            to_string(&Json::new(DealAction::Start)).unwrap(),
+            to_string(&RequestBody::start()).unwrap(),
             CORRECT_START_JSON
         );
     }
@@ -58,7 +66,7 @@ mod tests {
     #[test]
     fn close_json_is_correct() {
         assert_eq!(
-            to_string(&Json::new(DealAction::Close)).unwrap(),
+            to_string(&RequestBody::close()).unwrap(),
             CORRECT_CLOSE_JSON
         );
     }
