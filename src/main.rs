@@ -1,16 +1,18 @@
+use flexi_logger::{Age, Cleanup, Criterion, Duplicate, LogTarget, Logger, Naming};
+use log::{error, info};
 use serde::Deserialize;
 use std::convert::Infallible;
-use std::result::{Result};
-use warp::{reply, http::StatusCode, Filter, Rejection, Reply};
-use flexi_logger::{Logger, Duplicate, LogTarget};
-use log::info;
-
+use std::result::Result;
+use warp::{http::StatusCode, reply, Filter, Rejection, Reply};
+mod outgoing;
 
 #[derive(Deserialize, Debug)]
 pub struct IncomingTradeRequest {
     pub action: String,
     pub contracts: String,
 }
+
+
 
 fn get_json() -> impl Filter<Extract = ((),), Error = warp::Rejection> + Copy {
     warp::path!("trade")
@@ -29,14 +31,17 @@ fn ok_result(_: ()) -> impl Reply {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let logger = Logger::with_str("info")
         .log_target(LogTarget::File)
+        .rotate(
+            Criterion::AgeOrSize(Age::Day, 1000000),
+            Naming::Timestamps,
+            Cleanup::KeepLogFiles(8),
+        )
         .duplicate_to_stderr(Duplicate::Info)
         .start()?;
 
     info!("Tradeproxy starting up!");
 
-    let api = get_json()
-        .map(ok_result)
-        .recover(handle_error);
+    let api = get_json().map(ok_result).recover(handle_error);
 
     warp::serve(api).run(([0, 0, 0, 0], 3137)).await;
 
@@ -47,7 +52,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 async fn handle_error(err: Rejection) -> Result<impl Reply, Infallible> {
     let err_text = format!("Whoa, bad JSON: {:?}", err);
 
-    eprintln!("{}", err_text);
+    error!("{}", err_text);
+//     info!("Bad JSON:
+// {}", err.find());
 
     Ok(reply::with_status(err_text, StatusCode::BAD_REQUEST))
 }
@@ -55,7 +62,7 @@ async fn handle_error(err: Rejection) -> Result<impl Reply, Infallible> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use warp::test::{RequestBuilder, request};
+    use warp::test::{request, RequestBuilder};
 
     #[tokio::test]
     async fn it_accepts_good_json() {
@@ -75,17 +82,10 @@ mod tests {
         let filter = get_json();
 
         fn mock_request() -> RequestBuilder {
-            request()
-                .path("/trade")
-                .method("POST")
+            request().path("/trade").method("POST")
         }
 
-        assert!(
-            !mock_request()
-                .body("blah blah blah")
-                .matches(&filter)
-                .await
-        );
+        assert!(!mock_request().body("blah blah blah").matches(&filter).await);
 
         assert!(
             !mock_request()
@@ -98,9 +98,7 @@ mod tests {
     #[tokio::test]
     async fn it_returns_correct_status() {
         fn mock_request() -> RequestBuilder {
-            request()
-                .path("/trade")
-                .method("POST")
+            request().path("/trade").method("POST")
         }
 
         assert_eq!(
