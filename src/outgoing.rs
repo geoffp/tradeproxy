@@ -38,13 +38,9 @@ pub fn start_deal_request() -> OutgoingBotRequest {
 }
 
 pub fn close_deal_request() -> OutgoingBotRequest {
-    OutgoingBotRequest {
-        message_type: "bot",
-        bot_id: BOT_ID,
-        email_token: EMAIL_TOKEN,
-        delay_seconds: 0,
-        action: Some("close_at_market_price")
-    }
+    let mut req = start_deal_request();
+    req.action = Some("close_at_market_price");
+    req
 }
 
 #[cfg(test)]
@@ -56,6 +52,14 @@ mod tests {
         assert_eq!(
             to_string(&start_deal_request()).unwrap(),
             r#"{"message_type":"bot","bot_id":***REMOVED***,"email_token":"***REMOVED***","delay_seconds":0}"#
+        );
+    }
+
+    #[test]
+    fn close_json_is_correct() {
+        assert_eq!(
+            to_string(&close_deal_request()).unwrap(),
+            r#"{"message_type":"bot","bot_id":***REMOVED***,"email_token":"***REMOVED***","delay_seconds":0,"action":"close_at_market_price"}"#
         );
     }
 }
