@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use std::convert::Infallible;
-use std::result::Result;
-use warp::{http::StatusCode, Filter, Rejection, Reply};
+use std::result::{Result};
+use warp::{http::StatusCode, Filter, Rejection, Reply, reply::WithStatus};
 
 #[derive(Deserialize, Debug)]
 pub struct Request {
@@ -23,12 +23,16 @@ fn get_json() -> impl Filter<Extract = ((),), Error = warp::Rejection> + Copy {
     StatusCode::OK,
 )) */
 
+fn ok_result(_: ()) -> WithStatus<&'static str> {
+    warp::reply::with_status("Success!", StatusCode::OK)
+}
+
 #[tokio::main]
 async fn main() {
     println!("Tradeproxy starting up!");
 
     let api = get_json()
-        .map(|()| Ok(warp::reply::with_status("Success!", StatusCode::OK)))
+        .map(ok_result)
         .recover(handle_error);
 
     // .map(|reply: warp::reply::WithStatus<, bytes: Bytes| -> _ {
@@ -61,7 +65,7 @@ async fn it_accepts_good_json() {
         warp::test::request()
             .path("/trade")
             .method("POST")
-            .body("{\"action\": \"foo\", \"contracts\": \"bar\"}")
+            .body(r#"{"action": "foo", "contracts": "bar"}"#)
             .matches(&filter)
             .await
     );
@@ -70,12 +74,56 @@ async fn it_accepts_good_json() {
 #[tokio::test]
 async fn it_rejects_bad_json() {
     let filter = get_json();
-    assert!(
-        !warp::test::request()
+
+    fn mock_request() -> warp::test::RequestBuilder {
+        warp::test::request()
             .path("/trade")
             .method("POST")
+    }
+
+    assert!(
+        !mock_request()
             .body("blah blah blah")
             .matches(&filter)
             .await
+    );
+
+    assert!(
+        !mock_request()
+            .body(r#"{"wrong": "json"}"#)
+            .matches(&filter)
+            .await
+    );
+}
+
+#[tokio::test]
+async fn it_returns_correct_status() {
+
+    fn mock_request() -> warp::test::RequestBuilder {
+        warp::test::request()
+            .path("/trade")
+            .method("POST")
+    }
+
+    assert_eq!(
+        mock_request()
+            .body("blah blah blah")
+            .filter(&get_json().map(ok_result).recover(handle_error))
+            .await
+            .unwrap()
+            .into_response()
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
+
+    assert_eq!(
+        mock_request()
+            .body(r#"{"action": "foo", "contracts": "bar"}"#)
+            .filter(&get_json().map(ok_result).recover(handle_error))
+            .await
+            .unwrap()
+            .into_response()
+            .status(),
+        StatusCode::OK
     );
 }

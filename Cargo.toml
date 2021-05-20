@@ -12,6 +12,7 @@ warp = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 bytes = "1.0"
+log = "0.4.14"
 
 [dependencies.futures]
 version = "0.3"
