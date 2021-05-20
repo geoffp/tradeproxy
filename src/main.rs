@@ -7,7 +7,7 @@ use warp::{http::StatusCode, reply, Filter, Rejection, Reply};
 mod outgoing;
 
 #[derive(Deserialize, Debug)]
-pub struct IncomingTradeRequest {
+pub struct IncomingSignal {
     pub action: String,
     pub contracts: String,
 }
@@ -16,7 +16,7 @@ fn get_json() -> impl Filter<Extract = ((),), Error = warp::Rejection> + Copy {
     warp::path!("trade")
         .and(warp::post())
         .and(warp::body::json())
-        .map(|req: IncomingTradeRequest| {
+        .map(|req: IncomingSignal| {
             info!("Successful request: {:?}", req);
         })
 }
@@ -51,8 +51,6 @@ async fn handle_error(err: Rejection) -> Result<impl Reply, Infallible> {
     let err_text = format!("Whoa, bad JSON: {:?}", err);
 
     error!("{}", err_text);
-    //     info!("Bad JSON:
-    // {}", err.find());
 
     Ok(reply::with_status(err_text, StatusCode::BAD_REQUEST))
 }
@@ -62,13 +60,15 @@ mod tests {
     use super::*;
     use warp::test::{request, RequestBuilder};
 
+    fn mock_request() -> RequestBuilder {
+        request().path("/trade").method("POST")
+    }
+
     #[tokio::test]
     async fn it_accepts_good_json() {
         let filter = get_json();
         assert!(
-            request()
-                .path("/trade")
-                .method("POST")
+            mock_request()
                 .body(r#"{"action": "foo", "contracts": "bar"}"#)
                 .matches(&filter)
                 .await
@@ -78,10 +78,6 @@ mod tests {
     #[tokio::test]
     async fn it_rejects_bad_json() {
         let filter = get_json();
-
-        fn mock_request() -> RequestBuilder {
-            request().path("/trade").method("POST")
-        }
 
         assert!(!mock_request().body("blah blah blah").matches(&filter).await);
 
@@ -94,11 +90,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn it_returns_correct_status() {
-        fn mock_request() -> RequestBuilder {
-            request().path("/trade").method("POST")
-        }
+    async fn it_accepts_unnecesary_fields_in_json() {
+        let filter = get_json();
+        assert!(mock_request().body(r#"{"action": "foo", "contracts": "bar"}"#).matches(&filter).await);
+    }
 
+    #[tokio::test]
+    async fn it_returns_correct_status() {
         assert_eq!(
             mock_request()
                 .body("blah blah blah")

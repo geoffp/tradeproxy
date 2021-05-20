@@ -21,21 +21,21 @@ pub struct Json {
 }
 
 impl Json {
-    fn new(request_type: Type) -> Json {
+    fn new(action: DealAction) -> Json {
         Json {
             message_type: "bot",
             bot_id: BOT_ID,
             email_token: EMAIL_TOKEN,
             delay_seconds: 0,
-            action: match request_type {
-                Type::Start => None,
-                Type::Close => Some("close_at_market_price"),
+            action: match action {
+                DealAction::Start => None,
+                DealAction::Close => Some("close_at_market_price"),
             },
         }
     }
 }
 
-pub enum Type {
+pub enum DealAction {
     Start,
     Close,
 }
@@ -50,7 +50,7 @@ mod tests {
     #[test]
     fn start_json_is_correct() {
         assert_eq!(
-            to_string(&Json::new(Type::Start)).unwrap(),
+            to_string(&Json::new(DealAction::Start)).unwrap(),
             CORRECT_START_JSON
         );
     }
@@ -58,7 +58,7 @@ mod tests {
     #[test]
     fn close_json_is_correct() {
         assert_eq!(
-            to_string(&Json::new(Type::Close)).unwrap(),
+            to_string(&Json::new(DealAction::Close)).unwrap(),
             CORRECT_CLOSE_JSON
         );
     }
