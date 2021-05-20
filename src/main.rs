@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use std::convert::Infallible;
 use std::result::{Result};
-use warp::{http::StatusCode, Filter, Rejection, Reply, reply::WithStatus};
+use warp::{http::StatusCode, Filter, Rejection, Reply};
 
 #[derive(Deserialize, Debug)]
 pub struct Request {
@@ -18,12 +18,7 @@ fn get_json() -> impl Filter<Extract = ((),), Error = warp::Rejection> + Copy {
         })
 }
 
-/*Ok(warp::reply::with_status(
-    "Success!",
-    StatusCode::OK,
-)) */
-
-fn ok_result(_: ()) -> WithStatus<&'static str> {
+fn ok_result(_: ()) -> impl Reply {
     warp::reply::with_status("Success!", StatusCode::OK)
 }
 
@@ -34,17 +29,6 @@ async fn main() {
     let api = get_json()
         .map(ok_result)
         .recover(handle_error);
-
-    // .map(|reply: warp::reply::WithStatus<, bytes: Bytes| -> _ {
-    //     let bad_bytes = format!("Bad request content: {:?}", bytes);
-    //     println!("{}", bad_bytes);
-    // });
-
-    // .or(warp::body::bytes())
-    // .map(|reply: Response<Reply>, bytes: Bytes| -> _ {
-    //     let bad_bytes = format!("Bad request content: {:?}", bytes);
-    //     println!("{}", bad_bytes);
-    // });
 
     warp::serve(api).run(([0, 0, 0, 0], 3137)).await;
 }
