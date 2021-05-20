@@ -13,6 +13,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 bytes = "1.0"
 log = "0.4.14"
+flexi_logger = "0.17.1"
 
 [dependencies.futures]
 version = "0.3"
