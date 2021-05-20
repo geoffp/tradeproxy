@@ -10,56 +10,56 @@ use serde_json::ser::to_string;
 const EMAIL_TOKEN: &str = "***REMOVED***";
 const BOT_ID: u64 = ***REMOVED***;
 
-fn is_none<T>(opt: &Option<T>) -> bool {
-    match opt {
-        Some(_) => false,
-        None => true
-    }
-}
-
 #[derive(Deserialize, Serialize, Debug)]
-pub struct OutgoingBotRequest {
+pub struct Json {
     pub message_type: &'static str,
     pub bot_id: u64,
     pub email_token: &'static str,
     pub delay_seconds: u64,
-    #[serde(skip_serializing_if = "is_none")]
-    pub action: Option<&'static str>
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub action: Option<&'static str>,
 }
 
-pub fn start_deal_request() -> OutgoingBotRequest {
-    OutgoingBotRequest {
-        message_type: "bot",
-        bot_id: BOT_ID,
-        email_token: EMAIL_TOKEN,
-        delay_seconds: 0,
-        action: None
+impl Json {
+    fn new(request_type: Type) -> Json {
+        Json {
+            message_type: "bot",
+            bot_id: BOT_ID,
+            email_token: EMAIL_TOKEN,
+            delay_seconds: 0,
+            action: match request_type {
+                Type::Start => None,
+                Type::Close => Some("close_at_market_price"),
+            },
+        }
     }
 }
 
-pub fn close_deal_request() -> OutgoingBotRequest {
-    let mut req = start_deal_request();
-    req.action = Some("close_at_market_price");
-    req
+pub enum Type {
+    Start,
+    Close,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    const CORRECT_START_JSON: &str = r#"{"message_type":"bot","bot_id":***REMOVED***,"email_token":"***REMOVED***","delay_seconds":0}"#;
+    const CORRECT_CLOSE_JSON: &str = r#"{"message_type":"bot","bot_id":***REMOVED***,"email_token":"***REMOVED***","delay_seconds":0,"action":"close_at_market_price"}"#;
+
     #[test]
     fn start_json_is_correct() {
         assert_eq!(
-            to_string(&start_deal_request()).unwrap(),
-            r#"{"message_type":"bot","bot_id":***REMOVED***,"email_token":"***REMOVED***","delay_seconds":0}"#
+            to_string(&Json::new(Type::Start)).unwrap(),
+            CORRECT_START_JSON
         );
     }
 
     #[test]
     fn close_json_is_correct() {
         assert_eq!(
-            to_string(&close_deal_request()).unwrap(),
-            r#"{"message_type":"bot","bot_id":***REMOVED***,"email_token":"***REMOVED***","delay_seconds":0,"action":"close_at_market_price"}"#
+            to_string(&Json::new(Type::Close)).unwrap(),
+            CORRECT_CLOSE_JSON
         );
     }
 }

@@ -12,8 +12,6 @@ pub struct IncomingTradeRequest {
     pub contracts: String,
 }
 
-
-
 fn get_json() -> impl Filter<Extract = ((),), Error = warp::Rejection> + Copy {
     warp::path!("trade")
         .and(warp::post())
@@ -53,8 +51,8 @@ async fn handle_error(err: Rejection) -> Result<impl Reply, Infallible> {
     let err_text = format!("Whoa, bad JSON: {:?}", err);
 
     error!("{}", err_text);
-//     info!("Bad JSON:
-// {}", err.find());
+    //     info!("Bad JSON:
+    // {}", err.find());
 
     Ok(reply::with_status(err_text, StatusCode::BAD_REQUEST))
 }
