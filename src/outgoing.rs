@@ -1,5 +1,6 @@
-use serde::{Deserialize, Serialize};
-use serde_json::ser::to_string;
+use serde::Serialize;
+
+use super::{get_settings};
 
 // Start json
 //{  "message_type": "bot",  "bot_id": ***REMOVED***,  "email_token": "***REMOVED***",  "delay_seconds": 0}
@@ -7,25 +8,28 @@ use serde_json::ser::to_string;
 // Close json
 //{  "message_type": "bot",  "bot_id": ***REMOVED***,  "email_token": "***REMOVED***",  "delay_seconds": 0,  "action": "close_at_market_price"}
 
-const EMAIL_TOKEN: &str = "***REMOVED***";
-const BOT_ID: u64 = ***REMOVED***;
+// const EMAIL_TOKEN: &str = "***REMOVED***";
+// const BOT_ID: u64 = ***REMOVED***;
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Serialize, Debug)]
 pub struct RequestBody {
     pub message_type: &'static str,
     pub bot_id: u64,
-    pub email_token: &'static str,
+    pub email_token: String,
     pub delay_seconds: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub action: Option<&'static str>,
 }
 
 impl RequestBody {
-    fn new(action: DealAction) -> RequestBody {
+    pub fn new((action, bot_type): &(DealAction, BotType)) -> RequestBody {
         RequestBody {
             message_type: "bot",
-            bot_id: BOT_ID,
-            email_token: EMAIL_TOKEN,
+            bot_id: match bot_type {
+                BotType::Long => get_settings().long_bot_id,
+                BotType::Short => get_settings().short_bot_id
+            },
+            email_token: get_settings().email_token.to_string(),
             delay_seconds: 0,
             action: match action {
                 DealAction::Start => None,
@@ -33,24 +37,24 @@ impl RequestBody {
             },
         }
     }
-
-    fn start() -> RequestBody {
-        RequestBody::new(DealAction::Start)
-    }
-
-    fn close() -> RequestBody {
-        RequestBody::new(DealAction::Close)
-    }
 }
 
+#[derive(Debug)]
 pub enum DealAction {
     Start,
     Close,
 }
 
+#[derive(Debug)]
+pub enum BotType {
+    Long,
+    Short,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::ser::to_string;
 
     const CORRECT_START_JSON: &str = r#"{"message_type":"bot","bot_id":***REMOVED***,"email_token":"***REMOVED***","delay_seconds":0}"#;
     const CORRECT_CLOSE_JSON: &str = r#"{"message_type":"bot","bot_id":***REMOVED***,"email_token":"***REMOVED***","delay_seconds":0,"action":"close_at_market_price"}"#;
@@ -58,7 +62,7 @@ mod tests {
     #[test]
     fn start_json_is_correct() {
         assert_eq!(
-            to_string(&RequestBody::start()).unwrap(),
+            to_string(&RequestBody::new(&(DealAction::Start, BotType::Long))).unwrap(),
             CORRECT_START_JSON
         );
     }
@@ -66,7 +70,7 @@ mod tests {
     #[test]
     fn close_json_is_correct() {
         assert_eq!(
-            to_string(&RequestBody::close()).unwrap(),
+            to_string(&RequestBody::new(&(DealAction::Close, BotType::Long))).unwrap(),
             CORRECT_CLOSE_JSON
         );
     }

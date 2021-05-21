@@ -1,24 +1,69 @@
+extern crate config;
+extern crate serde;
+
+extern crate serde_derive;
+extern crate lazy_static;
+
+mod settings;
+
+use std::sync::{RwLock, RwLockReadGuard};
+use settings::Settings;
+use lazy_static::lazy_static;
+
 use flexi_logger::{Age, Cleanup, Criterion, Duplicate, LogTarget, Logger, Naming};
 use log::{error, info};
-use serde::Deserialize;
+use serde_json::to_string_pretty;
 use std::convert::Infallible;
 use std::result::Result;
 use warp::{http::StatusCode, reply, Filter, Rejection, Reply};
 mod outgoing;
+mod incoming;
+use outgoing::{BotType, DealAction, RequestBody};
+use incoming::{IncomingSignal, SignalAction};
 
-#[derive(Deserialize, Debug)]
-pub struct IncomingSignal {
-    pub action: String,
-    pub contracts: String,
+fn create_actions(action: SignalAction) -> [(DealAction, BotType); 2] {
+    match action {
+        SignalAction::Buy => [(DealAction::Start, BotType::Long), (DealAction::Close, BotType::Short)],
+        SignalAction::Sell => [(DealAction::Close, BotType::Long), (DealAction::Start, BotType::Short)],
+    }
+}
+
+lazy_static! {
+	pub static ref SETTINGS: RwLock<Settings> = match Settings::new() {
+        Ok(s) => RwLock::new(s),
+        Err(e) => panic!("Error loading config: {:?}", e)
+    };
+}
+
+pub fn get_settings() -> RwLockReadGuard<'static, Settings> {
+    SETTINGS.read().unwrap()
+}
+
+fn request_for_action(deal_action_pair: &(DealAction, BotType)) -> String {
+    to_string_pretty(&RequestBody::new(deal_action_pair)).unwrap()
 }
 
 fn get_json() -> impl Filter<Extract = ((),), Error = warp::Rejection> + Copy {
     warp::path!("trade")
         .and(warp::post())
         .and(warp::body::json())
-        .map(|req: IncomingSignal| {
-            info!("Successful request: {:?}", req);
+        .map(|signal: IncomingSignal| {
+            info!("Got signal: {:?}", signal);
+            for action in create_actions(signal.action).iter() {
+                info!("Generating {:?} request: {}", action, request_for_action(action));
+            }
         })
+}
+
+fn log_all(info: warp::log::Info) {
+    info!("Got a request:
+  method: {:?}
+  from: {:?}
+  head: {:?}",
+          info.method(),
+          info.remote_addr(),
+          info.request_headers(),
+    );
 }
 
 fn ok_result(_: ()) -> impl Reply {
@@ -39,7 +84,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Tradeproxy starting up!");
 
-    let api = get_json().map(ok_result).recover(handle_error);
+    let api = get_json()
+        .map(ok_result)
+        .recover(handle_error)
+        .with(warp::log::custom(log_all));
 
     warp::serve(api).run(([0, 0, 0, 0], 3137)).await;
 
@@ -66,11 +114,10 @@ mod tests {
 
     #[tokio::test]
     async fn it_accepts_good_json() {
-        let filter = get_json();
         assert!(
             mock_request()
-                .body(r#"{"action": "foo", "contracts": "bar"}"#)
-                .matches(&filter)
+                .body(r#"{"action": "buy", "contracts": "1"}"#)
+                .matches(&get_json())
                 .await
         );
     }
@@ -91,8 +138,7 @@ mod tests {
 
     #[tokio::test]
     async fn it_accepts_unnecesary_fields_in_json() {
-        let filter = get_json();
-        assert!(mock_request().body(r#"{"action": "foo", "contracts": "bar"}"#).matches(&filter).await);
+        assert!(mock_request().body(r#"{"action": "buy", "contracts": "1"}"#).matches(&get_json()).await);
     }
 
     #[tokio::test]
@@ -110,7 +156,7 @@ mod tests {
 
         assert_eq!(
             mock_request()
-                .body(r#"{"action": "foo", "contracts": "bar"}"#)
+                .body(r#"{"action": "sell", "contracts": "1"}"#)
                 .filter(&get_json().map(ok_result).recover(handle_error))
                 .await
                 .unwrap()
