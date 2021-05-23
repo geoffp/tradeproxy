@@ -15,7 +15,7 @@ use log::{error, info};
 use serde_json::to_string_pretty;
 use std::convert::Infallible;
 use std::result::Result;
-use warp::{http::{StatusCode, Method}, reply, Filter, Rejection, Reply};
+use warp::{http::{HeaderMap, StatusCode, Method}, reply, Filter, Rejection, Reply};
 mod outgoing;
 mod incoming;
 use outgoing::{BotType, DealAction, RequestBody};
@@ -45,36 +45,44 @@ fn request_for_action(deal_action_pair: &(DealAction, BotType)) -> String {
 
 fn log_request() -> impl Filter<Extract = (), Error = warp::Rejection> + Copy {
     warp::path!("trade")
-        .and(warp::body::bytes())
         .and(warp::method())
-        .map(|bytes: bytes::Bytes, method: Method| {
-            info!("Oho, a {:?} request: {:?}", method, bytes);
+        .and(warp::header::headers_cloned())
+        .map(|method: Method, headers: HeaderMap| {
+            info!("Oho, a {:?} request: {:?}", method, headers);
+        })
+        .untuple_one()
+        .and(warp::body::bytes())
+        .map(|bytes: bytes::Bytes| {
+            info!("Body: {:?}", bytes);
         })
         .untuple_one()
 }
 
-fn get_json() -> impl Filter<Extract = (), Error = warp::Rejection> + Copy {
+// fn get_json() -> impl Filter<Extract = (), Error = warp::Rejection> + Copy {
+//     warp::path!("trade")
+//         .and(warp::post())
+//         .and(warp::body::json())
+//         .map(|signal: IncomingSignal| {
+//             info!("Got signal: {:?}", signal);
+//             for action in create_actions(signal.action).iter() {
+//                 info!("Generating {:?} request: {}", action, request_for_action(action));
+//             }
+//         })
+//         .untuple_one()
+// }
+
+fn get_json() -> impl Filter<Extract = (IncomingSignal,), Error = warp::Rejection> + Copy {
     warp::path!("trade")
         .and(warp::post())
         .and(warp::body::json())
-        .map(|signal: IncomingSignal| {
-            info!("Got signal: {:?}", signal);
-            for action in create_actions(signal.action).iter() {
-                info!("Generating {:?} request: {}", action, request_for_action(action));
-            }
-        })
-        .untuple_one()
+        .map(|signal: IncomingSignal| signal)
 }
 
-fn log_all(info: warp::log::Info) {
-    info!("Got a request:
-  method: {:?}
-  from: {:?}
-  head: {:?}",
-          info.method(),
-          info.remote_addr(),
-          info.request_headers(),
-    );
+fn log_json(signal: IncomingSignal) {
+    info!("Got signal: {:?}", signal);
+    for action in create_actions(signal.action).iter() {
+        info!("Generating {:?} request: {}", action, request_for_action(action));
+    }
 }
 
 fn ok_result() -> impl Reply {
@@ -97,6 +105,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let api = log_request()
         .and(get_json())
+        .map(log_json).untuple_one()
         .map(ok_result)
         .recover(handle_error);
 
@@ -124,7 +133,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn it_accepts_good_json() {
+    async fn it_accepts_valid_json() {
         assert!(
             mock_request()
                 .body(r#"{"action": "buy", "contracts": "1"}"#)
@@ -157,7 +166,7 @@ mod tests {
         assert_eq!(
             mock_request()
                 .body("blah blah blah")
-                .filter(&get_json().map(ok_result).recover(handle_error))
+                .filter(&get_json().map(|_| ()).untuple_one().map(ok_result).recover(handle_error))
                 .await
                 .unwrap()
                 .into_response()
@@ -168,7 +177,7 @@ mod tests {
         assert_eq!(
             mock_request()
                 .body(r#"{"action": "sell", "contracts": "1"}"#)
-                .filter(&get_json().map(ok_result).recover(handle_error))
+                .filter(&get_json().map(|_| ()).untuple_one().map(ok_result).recover(handle_error))
                 .await
                 .unwrap()
                 .into_response()
