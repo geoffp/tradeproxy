@@ -15,7 +15,7 @@ use log::{error, info};
 use serde_json::to_string_pretty;
 use std::convert::Infallible;
 use std::result::Result;
-use warp::{http::StatusCode, reply, Filter, Rejection, Reply};
+use warp::{http::{StatusCode, Method}, reply, Filter, Rejection, Reply};
 mod outgoing;
 mod incoming;
 use outgoing::{BotType, DealAction, RequestBody};
@@ -43,7 +43,17 @@ fn request_for_action(deal_action_pair: &(DealAction, BotType)) -> String {
     to_string_pretty(&RequestBody::new(deal_action_pair)).unwrap()
 }
 
-fn get_json() -> impl Filter<Extract = ((),), Error = warp::Rejection> + Copy {
+fn log_request() -> impl Filter<Extract = (), Error = warp::Rejection> + Copy {
+    warp::path!("trade")
+        .and(warp::body::bytes())
+        .and(warp::method())
+        .map(|bytes: bytes::Bytes, method: Method| {
+            info!("Oho, a {:?} request: {:?}", method, bytes);
+        })
+        .untuple_one()
+}
+
+fn get_json() -> impl Filter<Extract = (), Error = warp::Rejection> + Copy {
     warp::path!("trade")
         .and(warp::post())
         .and(warp::body::json())
@@ -53,6 +63,7 @@ fn get_json() -> impl Filter<Extract = ((),), Error = warp::Rejection> + Copy {
                 info!("Generating {:?} request: {}", action, request_for_action(action));
             }
         })
+        .untuple_one()
 }
 
 fn log_all(info: warp::log::Info) {
@@ -66,7 +77,7 @@ fn log_all(info: warp::log::Info) {
     );
 }
 
-fn ok_result(_: ()) -> impl Reply {
+fn ok_result() -> impl Reply {
     reply::with_status("Success!", StatusCode::OK)
 }
 
@@ -84,10 +95,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Tradeproxy starting up!");
 
-    let api = get_json()
+    let api = log_request()
+        .and(get_json())
         .map(ok_result)
-        .recover(handle_error)
-        .with(warp::log::custom(log_all));
+        .recover(handle_error);
 
     warp::serve(api).run(([0, 0, 0, 0], 3137)).await;
 
