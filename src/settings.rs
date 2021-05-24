@@ -1,4 +1,4 @@
-use std::{result::Result, env, collections::HashSet, sync::{RwLock, RwLockReadGuard}};
+use std::{result::Result, collections::HashSet, sync::{RwLock, RwLockReadGuard}};
 use serde::Deserialize;
 use config::{ConfigError, Config, File, FileFormat, Environment};
 use lazy_static::lazy_static;
