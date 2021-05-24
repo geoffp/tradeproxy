@@ -1140,6 +1140,7 @@ name = "tradeproxy"
 version = "0.1.0"
 dependencies = [
  "bytes",
+ "chrono",
  "config",
  "flexi_logger",
  "futures",

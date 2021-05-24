@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, collections::HashSet};
 use serde::Deserialize;
 use config::{ConfigError, Config, File, FileFormat, Environment};
 
@@ -6,7 +6,8 @@ use config::{ConfigError, Config, File, FileFormat, Environment};
 pub struct Settings {
     pub long_bot_id: u64,
     pub short_bot_id: u64,
-    pub email_token: String
+    pub email_token: String,
+    pub tradingview_api_ips: HashSet<String>
 }
 
 impl Settings {

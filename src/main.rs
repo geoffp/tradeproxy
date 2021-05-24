@@ -3,23 +3,22 @@ extern crate serde;
 
 extern crate serde_derive;
 extern crate lazy_static;
+extern crate chrono;
 
 mod settings;
+mod outgoing;
+mod incoming;
 
-use std::sync::{RwLock, RwLockReadGuard};
+use std::{convert::Infallible,result::Result, sync::{RwLock, RwLockReadGuard}, collections::HashSet};
 use settings::Settings;
 use lazy_static::lazy_static;
-
 use flexi_logger::{Age, Cleanup, Criterion, Duplicate, LogTarget, Logger, Naming};
 use log::{error, info};
 use serde_json::to_string_pretty;
-use std::convert::Infallible;
-use std::result::Result;
 use warp::{http::{HeaderMap, StatusCode, Method}, reply, Filter, Rejection, Reply};
-mod outgoing;
-mod incoming;
 use outgoing::{BotType, DealAction, RequestBody};
 use incoming::{IncomingSignal, SignalAction};
+use chrono::prelude::{Local};
 
 fn create_actions(action: SignalAction) -> [(DealAction, BotType); 2] {
     match action {
@@ -43,39 +42,49 @@ fn request_for_action(deal_action_pair: &(DealAction, BotType)) -> String {
     to_string_pretty(&RequestBody::new(deal_action_pair)).unwrap()
 }
 
-fn log_request() -> impl Filter<Extract = (), Error = warp::Rejection> + Copy {
-    warp::path!("trade")
-        .and(warp::method())
-        .and(warp::header::headers_cloned())
-        .map(|method: Method, headers: HeaderMap| {
-            info!("Oho, a {:?} request: {:?}", method, headers);
-        })
-        .untuple_one()
-        .and(warp::body::bytes())
-        .map(|bytes: bytes::Bytes| {
-            info!("Body: {:?}", bytes);
-        })
-        .untuple_one()
+// fn is_allowed_ip() {
+//     let ips = get_settings();
+// }
+
+fn get_real_remote_ip<'a>(headers: &'a HeaderMap) -> &str {
+    let error_message = "[Remote address unknown]";
+
+    let real_ip_header = headers.get("x-real-ip");
+    if let Some(h) = real_ip_header {
+        match h.to_str() {
+            Ok(s) => &s,
+            Err(_) => error_message
+        }
+    } else {
+        error_message
+    }
 }
 
-// fn get_json() -> impl Filter<Extract = (), Error = warp::Rejection> + Copy {
-//     warp::path!("trade")
-//         .and(warp::post())
-//         .and(warp::body::json())
-//         .map(|signal: IncomingSignal| {
-//             info!("Got signal: {:?}", signal);
-//             for action in create_actions(signal.action).iter() {
-//                 info!("Generating {:?} request: {}", action, request_for_action(action));
-//             }
-//         })
-//         .untuple_one()
-// }
+fn log_remote_source(remote_ip: &str) {
+    let settings = get_settings();
+    let tradingview_apt_ips: &HashSet<String> = &settings.tradingview_api_ips;
+    if tradingview_apt_ips.contains(&String::from(remote_ip)) {
+        info!("REQUEST FROM TRADINGVIEW, FOR REAL!");
+    }
+}
 
 fn get_json() -> impl Filter<Extract = (IncomingSignal,), Error = warp::Rejection> + Copy {
     warp::path!("trade")
+        .and(warp::path::full())
+        .and(warp::method())
+        .and(warp::header::headers_cloned())
+        .map(|path: warp::path::FullPath, method: Method, headers: HeaderMap| {
+            let remote_ip = get_real_remote_ip(&headers);
+            info!("[{:?}] Oho, a {:?} request from {} to {:?}: {:?}", Local::now(), method, get_real_remote_ip(&headers), path, headers);
+            log_remote_source(remote_ip);
+        })
+        .untuple_one()
         .and(warp::post())
         .and(warp::body::json())
-        .map(|signal: IncomingSignal| signal)
+        .map(|signal: IncomingSignal| {
+            info!("Handling signal...");
+            signal
+        })
 }
 
 fn log_json(signal: IncomingSignal) {
@@ -86,8 +95,16 @@ fn log_json(signal: IncomingSignal) {
 }
 
 fn ok_result() -> impl Reply {
+    info!("Generating OK result...");
     reply::with_status("Success!", StatusCode::OK)
 }
+
+// fn entire_api() -> Recover {
+//     get_json()
+//         .map(log_json).untuple_one()
+//         .map(ok_result)
+//         .recover(handle_error)
+// }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -103,8 +120,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Tradeproxy starting up!");
 
-    let api = log_request()
-        .and(get_json())
+    let api =
+        get_json()
         .map(log_json).untuple_one()
         .map(ok_result)
         .recover(handle_error);
@@ -116,7 +133,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn handle_error(err: Rejection) -> Result<impl Reply, Infallible> {
-    let err_text = format!("Whoa, bad JSON: {:?}", err);
+    let err_text = format!("Rejected: {:?}", err);
 
     error!("{}", err_text);
 
@@ -127,6 +144,7 @@ async fn handle_error(err: Rejection) -> Result<impl Reply, Infallible> {
 mod tests {
     use super::*;
     use warp::test::{request, RequestBuilder};
+    const GOOD_JSON: &str = r#"{"action": "buy", "contracts": "1"}"#;
 
     fn mock_request() -> RequestBuilder {
         request().path("/trade").method("POST")
@@ -136,7 +154,7 @@ mod tests {
     async fn it_accepts_valid_json() {
         assert!(
             mock_request()
-                .body(r#"{"action": "buy", "contracts": "1"}"#)
+                .body(GOOD_JSON)
                 .matches(&get_json())
                 .await
         );
@@ -158,11 +176,11 @@ mod tests {
 
     #[tokio::test]
     async fn it_accepts_unnecesary_fields_in_json() {
-        assert!(mock_request().body(r#"{"action": "buy", "contracts": "1"}"#).matches(&get_json()).await);
+        assert!(mock_request().body(GOOD_JSON).matches(&get_json()).await);
     }
 
     #[tokio::test]
-    async fn it_returns_correct_status() {
+    async fn it_returns_bad_request_for_malformed_json() {
         assert_eq!(
             mock_request()
                 .body("blah blah blah")
@@ -173,16 +191,49 @@ mod tests {
                 .status(),
             StatusCode::BAD_REQUEST
         );
+    }
 
+    #[tokio::test]
+    async fn it_returns_ok_for_good_json() {
         assert_eq!(
             mock_request()
-                .body(r#"{"action": "sell", "contracts": "1"}"#)
+                .method("POST")
+                .body(&GOOD_JSON)
                 .filter(&get_json().map(|_| ()).untuple_one().map(ok_result).recover(handle_error))
                 .await
                 .unwrap()
                 .into_response()
                 .status(),
             StatusCode::OK
+        );
+    }
+
+    #[tokio::test]
+    async fn it_returns_bad_request_for_get_request() {
+        assert_eq!(
+            mock_request()
+                .method("GET")
+                .filter(&get_json().map(|_| ()).untuple_one().map(ok_result).recover(handle_error))
+                .await
+                .unwrap()
+                .into_response()
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[tokio::test]
+    async fn it_rejects_a_put() {
+        assert_eq!(
+            mock_request()
+                .method("PUT")
+                .body(GOOD_JSON)
+                .filter(&get_json().map(|_| ()).untuple_one().map(ok_result).recover(handle_error))
+                .await
+                .unwrap()
+                .into_response()
+                .status(),
+            StatusCode::BAD_REQUEST
         );
     }
 }
