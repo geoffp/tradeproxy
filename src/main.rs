@@ -98,6 +98,7 @@ fn ok_result() -> impl Reply {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let logger = Logger::with_str("info")
         .log_target(LogTarget::File)
+        .directory(&get_settings().log_dir)
         .rotate(
             Criterion::AgeOrSize(Age::Day, 1000000),
             Naming::Timestamps,
@@ -114,7 +115,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(ok_result)
         .recover(handle_error);
 
-    warp::serve(api).run(([0, 0, 0, 0], 3137)).await;
+    warp::serve(api).run(([0, 0, 0, 0], get_settings().listen_port)).await;
 
     logger.shutdown();
     Ok(())

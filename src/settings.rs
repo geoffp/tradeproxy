@@ -5,6 +5,8 @@ use lazy_static::lazy_static;
 
 #[derive(Debug, Deserialize)]
 pub struct Settings {
+    pub listen_port: u16,
+    pub log_dir: String,
     pub long_bot_id: u64,
     pub short_bot_id: u64,
     pub email_token: String,
@@ -30,7 +32,7 @@ impl Settings {
 
         // Add in settings from the environment (with a prefix of APP)
         // Eg.. `APP_DEBUG=1 ./target/app` would set the `debug` key
-        s.merge(Environment::with_prefix("app"))?;
+        s.merge(Environment::with_prefix("tvp"))?;
 
         // You can deserialize (and thus freeze) the entire configuration as
         s.try_into()
