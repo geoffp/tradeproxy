@@ -9,33 +9,21 @@ mod settings;
 mod outgoing;
 mod incoming;
 
-use std::{convert::Infallible,result::Result, sync::{RwLock, RwLockReadGuard}, collections::HashSet};
-use settings::Settings;
-use lazy_static::lazy_static;
+use std::{convert::Infallible,result::Result, collections::HashSet};
+pub use settings::{Settings, SETTINGS, get_settings};
 use flexi_logger::{Age, Cleanup, Criterion, Duplicate, LogTarget, Logger, Naming};
 use log::{error, info};
 use serde_json::to_string_pretty;
 use warp::{http::{HeaderMap, StatusCode, Method}, reply, Filter, Rejection, Reply};
 use outgoing::{BotType, DealAction, RequestBody};
 use incoming::{IncomingSignal, SignalAction};
-use chrono::prelude::{Local};
+use chrono::prelude::Local;
 
 fn create_actions(action: SignalAction) -> [(DealAction, BotType); 2] {
     match action {
         SignalAction::Buy => [(DealAction::Start, BotType::Long), (DealAction::Close, BotType::Short)],
         SignalAction::Sell => [(DealAction::Close, BotType::Long), (DealAction::Start, BotType::Short)],
     }
-}
-
-lazy_static! {
-	pub static ref SETTINGS: RwLock<Settings> = match Settings::new() {
-        Ok(s) => RwLock::new(s),
-        Err(e) => panic!("Error loading config: {:?}", e)
-    };
-}
-
-pub fn get_settings() -> RwLockReadGuard<'static, Settings> {
-    SETTINGS.read().unwrap()
 }
 
 fn request_for_action(deal_action_pair: &(DealAction, BotType)) -> String {

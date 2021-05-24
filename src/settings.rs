@@ -1,6 +1,7 @@
-use std::{env, collections::HashSet};
+use std::{result::Result, env, collections::HashSet, sync::{RwLock, RwLockReadGuard}};
 use serde::Deserialize;
 use config::{ConfigError, Config, File, FileFormat, Environment};
+use lazy_static::lazy_static;
 
 #[derive(Debug, Deserialize)]
 pub struct Settings {
@@ -34,4 +35,15 @@ impl Settings {
         // You can deserialize (and thus freeze) the entire configuration as
         s.try_into()
     }
+}
+
+lazy_static! {
+	pub static ref SETTINGS: RwLock<Settings> = match Settings::new() {
+        Ok(s) => RwLock::new(s),
+        Err(e) => panic!("Error loading config: {:?}", e)
+    };
+}
+
+pub fn get_settings() -> RwLockReadGuard<'static, Settings> {
+    SETTINGS.read().unwrap()
 }
