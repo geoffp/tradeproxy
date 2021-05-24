@@ -10,5 +10,5 @@ pub enum SignalAction {
 #[derive(Deserialize, Debug)]
 pub struct IncomingSignal {
     pub action: SignalAction,
-    pub contracts: String,
+    pub contracts: f64,
 }

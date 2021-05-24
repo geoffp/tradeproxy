@@ -1,15 +1,5 @@
 use serde::Serialize;
-
-use super::{get_settings};
-
-// Start json
-//{  "message_type": "bot",  "bot_id": ***REMOVED***,  "email_token": "***REMOVED***",  "delay_seconds": 0}
-
-// Close json
-//{  "message_type": "bot",  "bot_id": ***REMOVED***,  "email_token": "***REMOVED***",  "delay_seconds": 0,  "action": "close_at_market_price"}
-
-// const EMAIL_TOKEN: &str = "***REMOVED***";
-// const BOT_ID: u64 = ***REMOVED***;
+use super::get_settings;
 
 #[derive(Serialize, Debug)]
 pub struct RequestBody {
@@ -56,14 +46,15 @@ mod tests {
     use super::*;
     use serde_json::ser::to_string;
 
-    const CORRECT_START_JSON: &str = r#"{"message_type":"bot","bot_id":***REMOVED***,"email_token":"***REMOVED***","delay_seconds":0}"#;
-    const CORRECT_CLOSE_JSON: &str = r#"{"message_type":"bot","bot_id":***REMOVED***,"email_token":"***REMOVED***","delay_seconds":0,"action":"close_at_market_price"}"#;
+    // These just test long bots
+    const CORRECT_LONG_START_JSON: &str = r#"{"message_type":"bot","bot_id":1234567,"email_token":"89abcdef-789a-bcde-f012-456789abcdef","delay_seconds":0}"#;
+    const CORRECT_LONG_CLOSE_JSON: &str = r#"{"message_type":"bot","bot_id":1234567,"email_token":"89abcdef-789a-bcde-f012-456789abcdef","delay_seconds":0,"action":"close_at_market_price"}"#;
 
     #[test]
     fn start_json_is_correct() {
         assert_eq!(
             to_string(&RequestBody::new(&(DealAction::Start, BotType::Long))).unwrap(),
-            CORRECT_START_JSON
+            CORRECT_LONG_START_JSON
         );
     }
 
@@ -71,7 +62,7 @@ mod tests {
     fn close_json_is_correct() {
         assert_eq!(
             to_string(&RequestBody::new(&(DealAction::Close, BotType::Long))).unwrap(),
-            CORRECT_CLOSE_JSON
+            CORRECT_LONG_CLOSE_JSON
         );
     }
 }

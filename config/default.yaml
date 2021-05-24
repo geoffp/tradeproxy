@@ -1,3 +1,11 @@
-email_token: ***REMOVED***
-long_bot_id: ***REMOVED***
-short_bot_id: ***REMOVED***
+listen_port: 3137
+log_dir: .
+tradingview_api_ips:
+  - 52.89.214.238
+  - 34.212.75.30
+  - 54.218.53.128
+  - 52.32.178.7
+# Set these manually
+email_token: 89abcdef-789a-bcde-f012-456789abcdef
+long_bot_id: 1234567
+short_bot_id: 7654321

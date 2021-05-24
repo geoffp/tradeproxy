@@ -30,10 +30,6 @@ fn request_for_action(deal_action_pair: &(DealAction, BotType)) -> String {
     to_string_pretty(&RequestBody::new(deal_action_pair)).unwrap()
 }
 
-// fn is_allowed_ip() {
-//     let ips = get_settings();
-// }
-
 fn get_real_remote_ip<'a>(headers: &'a HeaderMap) -> &str {
     let error_message = "[Remote address unknown]";
 
@@ -47,6 +43,10 @@ fn get_real_remote_ip<'a>(headers: &'a HeaderMap) -> &str {
         error_message
     }
 }
+
+// fn is_tradingview_ip() {
+
+// }
 
 fn log_remote_source(remote_ip: &str) {
     let settings = get_settings();
@@ -133,7 +133,7 @@ async fn handle_error(err: Rejection) -> Result<impl Reply, Infallible> {
 mod tests {
     use super::*;
     use warp::test::{request, RequestBuilder};
-    const GOOD_JSON: &str = r#"{"action": "buy", "contracts": "1"}"#;
+    const GOOD_JSON: &str = r#"{"action": "buy", "contracts": 1}"#;
 
     fn mock_request() -> RequestBuilder {
         request().path("/trade").method("POST")

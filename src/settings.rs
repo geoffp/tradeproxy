@@ -23,16 +23,21 @@ impl Settings {
         // Add in the current environment file
         // Default to 'development' env
         // Note that this file is _optional_
-        let env = env::var("RUN_MODE").unwrap_or_else(|_| "development".into());
-        s.merge(File::with_name(&format!("config/{}", env)).required(false))?;
+        // let env = env::var("RUN_MODE").unwrap_or_else(|_| "development".into());
+        // s.merge(File::with_name(&format!("config/{}", env)).required(false))?;
+
+        s.merge(File::with_name("config/default.yaml").required(false))?;
 
         // Add in a local configuration file
         // This file shouldn't be checked in to git
-        s.merge(File::with_name("/home/geoff/.tradeproxy.yaml").format(FileFormat::Yaml).required(true))?;
+        // AND it should only be loaded when we're not running unit tests -- in that case, we should use the defaults
+        if !cfg!(test) {
+            s.merge(File::with_name("/home/geoff/.tradeproxy.yaml").format(FileFormat::Yaml).required(true))?;
+        }
 
         // Add in settings from the environment (with a prefix of APP)
         // Eg.. `APP_DEBUG=1 ./target/app` would set the `debug` key
-        s.merge(Environment::with_prefix("tvp"))?;
+        s.merge(Environment::with_prefix("tp"))?;
 
         // You can deserialize (and thus freeze) the entire configuration as
         s.try_into()
