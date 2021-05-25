@@ -14,7 +14,7 @@ pub use settings::{Settings, SETTINGS, get_settings};
 use flexi_logger::{Age, Cleanup, Criterion, Duplicate, LogTarget, Logger, Naming};
 use log::{error, info};
 use serde_json::to_string_pretty;
-use warp::{http::{HeaderMap, StatusCode, Method}, reply, Filter, Rejection, Reply};
+use warp::{Filter, Rejection, Reply, http::{HeaderMap, StatusCode, Method}, reply};
 use outgoing::{BotType, DealAction, RequestBody};
 use incoming::{IncomingSignal, SignalAction};
 use chrono::prelude::Local;
@@ -44,14 +44,14 @@ fn get_real_remote_ip<'a>(headers: &'a HeaderMap) -> &str {
     }
 }
 
-// fn is_tradingview_ip() {
-
-// }
-
-fn log_remote_source(remote_ip: &str) {
+fn is_tradingview_ip(remote_ip: &str) -> bool {
     let settings = get_settings();
     let tradingview_apt_ips: &HashSet<String> = &settings.tradingview_api_ips;
-    if tradingview_apt_ips.contains(&String::from(remote_ip)) {
+    tradingview_apt_ips.contains(&String::from(remote_ip))
+}
+
+fn log_remote_source(remote_ip: &str) {
+    if is_tradingview_ip(remote_ip) {
         info!("REQUEST FROM TRADINGVIEW, FOR REAL!");
     }
 }
@@ -82,17 +82,17 @@ fn log_json(signal: IncomingSignal) {
     }
 }
 
-fn ok_result() -> impl Reply {
+fn ok_result() -> warp::reply::WithStatus<&'static str> {
     info!("Generating OK result...");
     reply::with_status("Success!", StatusCode::OK)
 }
 
-// fn entire_api() -> Recover {
-//     get_json()
-//         .map(log_json).untuple_one()
-//         .map(ok_result)
-//         .recover(handle_error)
-// }
+fn entire_api() -> impl Filter<Extract = (impl Reply,), Error = Infallible> + Copy + Send {
+    get_json()
+        .map(log_json).untuple_one()
+        .map(ok_result)
+        .recover(handle_error)
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -109,13 +109,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Tradeproxy starting up!");
 
-    let api =
-        get_json()
-        .map(log_json).untuple_one()
-        .map(ok_result)
-        .recover(handle_error);
-
-    warp::serve(api).run(([0, 0, 0, 0], get_settings().listen_port)).await;
+    warp::serve(entire_api()).run(([0, 0, 0, 0], get_settings().listen_port)).await;
 
     logger.shutdown();
     Ok(())
@@ -158,14 +152,14 @@ mod tests {
         assert!(
             !mock_request()
                 .body(r#"{"wrong": "json"}"#)
-                .matches(&filter)
+                .matches(&get_json())
                 .await
         );
     }
 
     #[tokio::test]
     async fn it_accepts_unnecesary_fields_in_json() {
-        assert!(mock_request().body(GOOD_JSON).matches(&get_json()).await);
+        assert!(mock_request().body(r#"{"action": "buy", "contracts": 1, "extra": 42}"#).matches(&get_json()).await);
     }
 
     #[tokio::test]
@@ -173,7 +167,7 @@ mod tests {
         assert_eq!(
             mock_request()
                 .body("blah blah blah")
-                .filter(&get_json().map(|_| ()).untuple_one().map(ok_result).recover(handle_error))
+                .filter(&entire_api())
                 .await
                 .unwrap()
                 .into_response()
@@ -188,7 +182,7 @@ mod tests {
             mock_request()
                 .method("POST")
                 .body(&GOOD_JSON)
-                .filter(&get_json().map(|_| ()).untuple_one().map(ok_result).recover(handle_error))
+                .filter(&entire_api())
                 .await
                 .unwrap()
                 .into_response()
@@ -202,7 +196,7 @@ mod tests {
         assert_eq!(
             mock_request()
                 .method("GET")
-                .filter(&get_json().map(|_| ()).untuple_one().map(ok_result).recover(handle_error))
+                .filter(&entire_api())
                 .await
                 .unwrap()
                 .into_response()
@@ -216,8 +210,8 @@ mod tests {
         assert_eq!(
             mock_request()
                 .method("PUT")
-                .body(GOOD_JSON)
-                .filter(&get_json().map(|_| ()).untuple_one().map(ok_result).recover(handle_error))
+                .body(&GOOD_JSON)
+                .filter(&entire_api())
                 .await
                 .unwrap()
                 .into_response()
