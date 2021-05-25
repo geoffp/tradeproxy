@@ -1,6 +1,7 @@
-use std::{result::Result, collections::HashSet, sync::{RwLock, RwLockReadGuard}};
+use std::{result::Result, collections::HashSet, sync::{RwLock, RwLockReadGuard}, path::Path};
 use serde::Deserialize;
 use config::{ConfigError, Config, File, FileFormat, Environment};
+use directories_next::BaseDirs;
 use lazy_static::lazy_static;
 
 #[derive(Debug, Deserialize)]
@@ -16,6 +17,13 @@ pub struct Settings {
 impl Settings {
     pub fn new() -> Result<Self, ConfigError> {
         let mut s = Config::default();
+        let base_dirs = BaseDirs::new();
+
+        // On Linux, this will be ~/.config
+        let user_config_dir: &Path = match &base_dirs {
+            Some(base_dirs) => base_dirs.config_dir(),
+            None => panic!("Can't find user config directory!")
+        };
 
         // Start off by merging in the "default" configuration file
         // s.merge(File::with_name("config/default"))?;
@@ -32,7 +40,7 @@ impl Settings {
         // This file shouldn't be checked in to git
         // AND it should only be loaded when we're not running unit tests -- in that case, we should use the defaults
         if !cfg!(test) {
-            s.merge(File::with_name("/home/geoff/.tradeproxy.yaml").format(FileFormat::Yaml).required(true))?;
+            s.merge(File::from(user_config_dir.join("tradeproxy").join("config.yaml")).format(FileFormat::Yaml).required(true))?;
         }
 
         // Add in settings from the environment (with a prefix of APP)
