@@ -1,33 +1,42 @@
 extern crate config;
 extern crate serde;
 
-extern crate serde_derive;
-extern crate lazy_static;
 extern crate chrono;
+extern crate lazy_static;
+extern crate serde_derive;
 
-mod settings;
-mod outgoing;
 mod incoming;
+mod outgoing;
+mod settings;
 
-use std::{convert::Infallible,result::Result, collections::HashSet};
-pub use settings::{Settings, SETTINGS, get_settings};
-use flexi_logger::{Age, Cleanup, Criterion, Duplicate, LogTarget, Logger, Naming};
-use log::{error, info};
-use serde_json::to_string_pretty;
-use warp::{Filter, Rejection, Reply, http::{HeaderMap, StatusCode, Method}, reply};
-use outgoing::{BotType, DealAction, RequestBody};
-use incoming::{IncomingSignal, SignalAction};
 use chrono::prelude::Local;
+use flexi_logger::{Age, Cleanup, Criterion, Duplicate, LogTarget, Logger, Naming};
+use incoming::{IncomingSignal, SignalAction};
+use log::{error, info};
+use outgoing::{BotType, DealAction, OutgoingRequestBody};
+use serde_json::to_string_pretty;
+pub use settings::{get_settings, Settings, SETTINGS};
+use std::{collections::HashSet, convert::Infallible, result::Result};
+use warp::{
+    http::{HeaderMap, Method, StatusCode},
+    reply, Filter, Rejection, Reply,
+};
 
 fn create_actions(action: SignalAction) -> [(DealAction, BotType); 2] {
     match action {
-        SignalAction::Buy => [(DealAction::Start, BotType::Long), (DealAction::Close, BotType::Short)],
-        SignalAction::Sell => [(DealAction::Close, BotType::Long), (DealAction::Start, BotType::Short)],
+        SignalAction::Buy => [
+            (DealAction::Start, BotType::Long),
+            (DealAction::Close, BotType::Short),
+        ],
+        SignalAction::Sell => [
+            (DealAction::Close, BotType::Long),
+            (DealAction::Start, BotType::Short),
+        ],
     }
 }
 
 fn request_for_action(deal_action_pair: &(DealAction, BotType)) -> String {
-    to_string_pretty(&RequestBody::new(deal_action_pair)).unwrap()
+    to_string_pretty(&OutgoingRequestBody::new(deal_action_pair)).unwrap()
 }
 
 fn get_real_remote_ip<'a>(headers: &'a HeaderMap) -> &str {
@@ -37,7 +46,7 @@ fn get_real_remote_ip<'a>(headers: &'a HeaderMap) -> &str {
     if let Some(h) = real_ip_header {
         match h.to_str() {
             Ok(s) => &s,
-            Err(_) => error_message
+            Err(_) => error_message,
         }
     } else {
         error_message
@@ -61,11 +70,20 @@ fn get_json() -> impl Filter<Extract = (IncomingSignal,), Error = warp::Rejectio
         .and(warp::path::full())
         .and(warp::method())
         .and(warp::header::headers_cloned())
-        .map(|path: warp::path::FullPath, method: Method, headers: HeaderMap| {
-            let remote_ip = get_real_remote_ip(&headers);
-            info!("[{:?}] Oho, a {:?} request from {} to {:?}: {:?}", Local::now(), method, get_real_remote_ip(&headers), path, headers);
-            log_remote_source(remote_ip);
-        })
+        .map(
+            |path: warp::path::FullPath, method: Method, headers: HeaderMap| {
+                let remote_ip = get_real_remote_ip(&headers);
+                info!(
+                    "[{:?}] Oho, a {:?} request from {} to {:?}: {:?}",
+                    Local::now(),
+                    method,
+                    get_real_remote_ip(&headers),
+                    path,
+                    headers
+                );
+                log_remote_source(remote_ip);
+            },
+        )
         .untuple_one()
         .and(warp::post())
         .and(warp::body::json())
@@ -78,7 +96,11 @@ fn get_json() -> impl Filter<Extract = (IncomingSignal,), Error = warp::Rejectio
 fn log_json(signal: IncomingSignal) {
     info!("Got signal: {:?}", signal);
     for action in create_actions(signal.action).iter() {
-        info!("Generating {:?} request: {}", action, request_for_action(action));
+        info!(
+            "Generating {:?} request: {}",
+            action,
+            request_for_action(action)
+        );
     }
 }
 
@@ -89,7 +111,8 @@ fn ok_result() -> warp::reply::WithStatus<&'static str> {
 
 fn entire_api() -> impl Filter<Extract = (impl Reply,), Error = Infallible> + Copy + Send {
     get_json()
-        .map(log_json).untuple_one()
+        .map(log_json)
+        .untuple_one()
         .map(ok_result)
         .recover(handle_error)
 }
@@ -113,7 +136,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Tradeproxy starting up! Logging to {}", log_path_str);
 
-    warp::serve(entire_api()).run(([0, 0, 0, 0], get_settings().listen_port)).await;
+    warp::serve(entire_api())
+        .run(([0, 0, 0, 0], get_settings().listen_port))
+        .await;
 
     logger.shutdown();
     Ok(())
@@ -139,12 +164,7 @@ mod tests {
 
     #[tokio::test]
     async fn it_accepts_valid_json() {
-        assert!(
-            mock_request()
-                .body(GOOD_JSON)
-                .matches(&get_json())
-                .await
-        );
+        assert!(mock_request().body(GOOD_JSON).matches(&get_json()).await);
     }
 
     #[tokio::test]
@@ -163,7 +183,12 @@ mod tests {
 
     #[tokio::test]
     async fn it_accepts_unnecesary_fields_in_json() {
-        assert!(mock_request().body(r#"{"action": "buy", "contracts": 1, "extra": 42}"#).matches(&get_json()).await);
+        assert!(
+            mock_request()
+                .body(r#"{"action": "buy", "contracts": 1, "extra": 42}"#)
+                .matches(&get_json())
+                .await
+        );
     }
 
     #[tokio::test]

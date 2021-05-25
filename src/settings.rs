@@ -1,8 +1,13 @@
-use std::{collections::HashSet, path::Path, result::Result, sync::{RwLock, RwLockReadGuard}};
-use serde::Deserialize;
-use config::{ConfigError, Config, File, FileFormat, Environment};
+use config::{Config, ConfigError, Environment, File, FileFormat};
 use directories_next::BaseDirs;
 use lazy_static::lazy_static;
+use serde::Deserialize;
+use std::{
+    collections::HashSet,
+    path::Path,
+    result::Result,
+    sync::{RwLock, RwLockReadGuard},
+};
 
 #[derive(Debug, Deserialize)]
 pub struct Settings {
@@ -12,7 +17,7 @@ pub struct Settings {
     pub short_bot_id: u64,
     pub email_token: String,
     pub tradingview_api_ips: HashSet<String>,
-    pub log_path: Option<String>
+    pub log_path: Option<String>,
 }
 
 impl Settings {
@@ -23,7 +28,7 @@ impl Settings {
         // On Linux, this will be ~/.config
         let user_config_dir: &Path = match &base_dirs {
             Some(base_dirs) => base_dirs.config_dir(),
-            None => panic!("Can't find user config directory!")
+            None => panic!("Can't find user config directory!"),
         };
 
         // Start off by merging in the "default" configuration file
@@ -56,7 +61,11 @@ impl Settings {
         if let Some(dir) = &tp_config_dir {
             log_dir_str = dir.join("log").to_str().map(String::from);
             let config_path = dir.join("config.yaml");
-            s.merge(File::from(config_path).format(FileFormat::Yaml).required(true))?;
+            s.merge(
+                File::from(config_path)
+                    .format(FileFormat::Yaml)
+                    .required(true),
+            )?;
         };
 
         s.set("log_path", log_dir_str).unwrap();
@@ -71,9 +80,9 @@ impl Settings {
 }
 
 lazy_static! {
-	pub static ref SETTINGS: RwLock<Settings> = match Settings::new() {
+    pub static ref SETTINGS: RwLock<Settings> = match Settings::new() {
         Ok(s) => RwLock::new(s),
-        Err(e) => panic!("Error loading config: {:?}", e)
+        Err(e) => panic!("Error loading config: {:?}", e),
     };
 }
 

@@ -4,7 +4,7 @@ use serde::Deserialize;
 #[serde(rename_all = "lowercase")]
 pub enum SignalAction {
     Buy,
-    Sell
+    Sell,
 }
 
 #[derive(Deserialize, Debug)]
