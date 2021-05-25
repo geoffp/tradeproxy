@@ -96,9 +96,13 @@ fn entire_api() -> impl Filter<Extract = (impl Reply,), Error = Infallible> + Co
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let log_path = &get_settings().log_path;
+    let default_log_path = String::from(".");
+    let log_path_str = log_path.as_ref().unwrap_or(&default_log_path);
+
     let logger = Logger::with_str("info")
         .log_target(LogTarget::File)
-        .directory(&get_settings().log_dir)
+        .directory(log_path_str)
         .rotate(
             Criterion::AgeOrSize(Age::Day, 1000000),
             Naming::Timestamps,
@@ -107,7 +111,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .duplicate_to_stderr(Duplicate::Info)
         .start()?;
 
-    info!("Tradeproxy starting up!");
+    info!("Tradeproxy starting up! Logging to {}", log_path_str);
 
     warp::serve(entire_api()).run(([0, 0, 0, 0], get_settings().listen_port)).await;
 

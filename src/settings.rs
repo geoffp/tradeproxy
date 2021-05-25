@@ -1,4 +1,4 @@
-use std::{result::Result, collections::HashSet, sync::{RwLock, RwLockReadGuard}, path::Path};
+use std::{collections::HashSet, path::Path, result::Result, sync::{RwLock, RwLockReadGuard}};
 use serde::Deserialize;
 use config::{ConfigError, Config, File, FileFormat, Environment};
 use directories_next::BaseDirs;
@@ -11,7 +11,8 @@ pub struct Settings {
     pub long_bot_id: u64,
     pub short_bot_id: u64,
     pub email_token: String,
-    pub tradingview_api_ips: HashSet<String>
+    pub tradingview_api_ips: HashSet<String>,
+    pub log_path: Option<String>
 }
 
 impl Settings {
@@ -39,9 +40,26 @@ impl Settings {
         // Add in a local configuration file
         // This file shouldn't be checked in to git
         // AND it should only be loaded when we're not running unit tests -- in that case, we should use the defaults
-        if !cfg!(test) {
-            s.merge(File::from(user_config_dir.join("tradeproxy").join("config.yaml")).format(FileFormat::Yaml).required(true))?;
-        }
+
+        let mut log_dir_str: Option<String> = None;
+
+        let tp_config_dir = if cfg!(test) {
+            None
+        } else if cfg!(debug_assertions) {
+            Some(user_config_dir.join("tradeproxy-dev"))
+        } else {
+            Some(user_config_dir.join("tradeproxy"))
+        };
+
+        eprintln!("Config dir: {:?}", tp_config_dir);
+
+        if let Some(dir) = &tp_config_dir {
+            log_dir_str = dir.join("log").to_str().map(String::from);
+            let config_path = dir.join("config.yaml");
+            s.merge(File::from(config_path).format(FileFormat::Yaml).required(true))?;
+        };
+
+        s.set("log_path", log_dir_str).unwrap();
 
         // Add in settings from the environment (with a prefix of APP)
         // Eg.. `APP_DEBUG=1 ./target/app` would set the `debug` key
