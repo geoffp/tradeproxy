@@ -1,20 +1,27 @@
 use super::get_settings;
 use serde::Serialize;
-use serde_json::json;
-
-#[cfg(test)]
-use mockito;
+use reqwest::{Response, Client};
 
 pub const REQUEST_URL: &str = "https://3commas.io/trade_signal/trading_view";
 
 pub fn request_url() -> String {
-    #[cfg(test)]
-    let url = String::from(mockito::server_url());
+    if cfg!(test) {
+        String::from(mockito::server_url())
+    } else {
+        String::from(REQUEST_URL)
+    }
+}
 
-    #[cfg(not(test))]
-    let url = String::from(REQUEST_URL);
+#[derive(Debug)]
+pub enum DealAction {
+    Start,
+    Close,
+}
 
-    url
+#[derive(Debug)]
+pub enum BotType {
+    Long,
+    Short,
 }
 
 #[derive(Serialize, Debug)]
@@ -45,17 +52,14 @@ impl OutgoingRequestBody {
     }
 }
 
-#[derive(Debug)]
-pub enum DealAction {
-    Start,
-    Close,
+pub async fn make_request(request: OutgoingRequestBody) -> Result<Response, reqwest::Error> {
+    let url: &str = &request_url();
+    let client: Client = Client::new();
+    let result = client.post(url).json(&request).send().await?;
+    Ok(result)
 }
 
-#[derive(Debug)]
-pub enum BotType {
-    Long,
-    Short,
-}
+
 
 #[cfg(test)]
 mod data_tests {
@@ -97,6 +101,7 @@ mod request_tests {
     use data_tests::CORRECT_LONG_START_JSON;
     use mockito::{mock, Matcher};
     use reqwest::{get, Client, Response};
+    use serde_json::json;
 
     #[tokio::test]
     async fn hello_world() {
@@ -130,16 +135,10 @@ mod request_tests {
             .match_body(Matcher::JsonString(good_json_str))
             .create();
 
-        async fn req_good(good_json: OutgoingRequestBody) -> Result<Response, reqwest::Error> {
-            let url: &str = &request_url();
-            let client: Client = Client::new();
-            let result = client.post(url).json(&good_json).send().await?;
-            Ok(result)
-        }
-
-        let result_good: Result<Response, reqwest::Error> = req_good(good_json).await;
+        let result_good: Result<Response, reqwest::Error> = make_request(good_json).await;
         _m.assert();
         assert!(result_good.is_ok());
+        assert_eq!(result_good.unwrap().status(), reqwest::StatusCode::OK)
     }
 
     #[tokio::test]

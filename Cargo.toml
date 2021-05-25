@@ -23,6 +23,6 @@ mockito = "0.30.0"
 reqwest = { version = "0.11.3", features = ["json"] }
 
 [dependencies.futures]
-version = "0.3"
-features = ["alloc"]
+version = "0.3.15"
+features = ["alloc", "executor"]
 default-features = false

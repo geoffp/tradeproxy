@@ -11,9 +11,10 @@ mod settings;
 
 use chrono::prelude::Local;
 use flexi_logger::{Age, Cleanup, Criterion, Duplicate, LogTarget, Logger, Naming};
+use futures::executor::block_on;
 use incoming::{IncomingSignal, SignalAction};
 use log::{error, info};
-use outgoing::{BotType, DealAction, OutgoingRequestBody};
+use outgoing::{BotType, DealAction, OutgoingRequestBody, make_request};
 use serde_json::to_string_pretty;
 pub use settings::{get_settings, Settings, SETTINGS};
 use std::{collections::HashSet, convert::Infallible, result::Result};
@@ -35,7 +36,7 @@ fn create_actions(action: SignalAction) -> [(DealAction, BotType); 2] {
     }
 }
 
-fn request_for_action(deal_action_pair: &(DealAction, BotType)) -> String {
+fn request_str_for_action(deal_action_pair: &(DealAction, BotType)) -> String {
     to_string_pretty(&OutgoingRequestBody::new(deal_action_pair)).unwrap()
 }
 
@@ -93,14 +94,25 @@ fn get_json() -> impl Filter<Extract = (IncomingSignal,), Error = warp::Rejectio
         })
 }
 
-fn log_json(signal: IncomingSignal) {
+fn handle_signal(signal: IncomingSignal) {
     info!("Got signal: {:?}", signal);
     for action in create_actions(signal.action).iter() {
+        let request_json: OutgoingRequestBody = OutgoingRequestBody::new(action);
+        // Log the request
         info!(
             "Generating {:?} request: {}",
             action,
-            request_for_action(action)
+            request_str_for_action(action)
         );
+
+        if cfg!(not(test)) {
+            let result = block_on(make_request(request_json));
+            info!(
+                "Request for {:?} said: {:?}",
+                action,
+                result
+            )
+        };
     }
 }
 
@@ -111,7 +123,7 @@ fn ok_result() -> warp::reply::WithStatus<&'static str> {
 
 fn entire_api() -> impl Filter<Extract = (impl Reply,), Error = Infallible> + Copy + Send {
     get_json()
-        .map(log_json)
+        .map(handle_signal)
         .untuple_one()
         .map(ok_result)
         .recover(handle_error)
