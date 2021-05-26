@@ -14,7 +14,7 @@ use flexi_logger::{Age, Cleanup, Criterion, Duplicate, LogTarget, Logger, Naming
 use futures::executor::block_on;
 use incoming::{IncomingSignal, SignalAction};
 use log::{error, info};
-use outgoing::{BotType, DealAction, OutgoingRequestBody, make_request};
+use outgoing::{BotType, DealAction, OutgoingRequestBody, execute_request};
 use serde_json::to_string_pretty;
 pub use settings::{get_settings, Settings, SETTINGS};
 use std::{collections::HashSet, convert::Infallible, result::Result};
@@ -106,7 +106,7 @@ fn handle_signal(signal: IncomingSignal) {
         );
 
         if cfg!(not(test)) {
-            let result = block_on(make_request(request_json));
+            let result = block_on(execute_request(request_json));
             info!(
                 "Request for {:?} said: {:?}",
                 action,

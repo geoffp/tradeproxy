@@ -52,7 +52,7 @@ impl OutgoingRequestBody {
     }
 }
 
-pub async fn make_request(request: OutgoingRequestBody) -> Result<Response, reqwest::Error> {
+pub async fn execute_request(request: OutgoingRequestBody) -> Result<Response, reqwest::Error> {
     let url: &str = &request_url();
     let client: Client = Client::new();
     let result = client.post(url).json(&request).send().await?;
@@ -135,7 +135,7 @@ mod request_tests {
             .match_body(Matcher::JsonString(good_json_str))
             .create();
 
-        let result_good: Result<Response, reqwest::Error> = make_request(good_json).await;
+        let result_good: Result<Response, reqwest::Error> = execute_request(good_json).await;
         _m.assert();
         assert!(result_good.is_ok());
         assert_eq!(result_good.unwrap().status(), reqwest::StatusCode::OK)
