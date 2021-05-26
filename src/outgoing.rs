@@ -1,6 +1,6 @@
+use log::{info};
 use super::get_settings;
 use serde::Serialize;
-use reqwest::{Response, Client};
 
 pub const REQUEST_URL: &str = "https://3commas.io/trade_signal/trading_view";
 
@@ -25,7 +25,7 @@ pub enum BotType {
 }
 
 #[derive(Serialize, Debug)]
-pub struct OutgoingRequestBody {
+pub struct OutgoingRequest {
     pub message_type: &'static str,
     pub bot_id: u64,
     pub email_token: String,
@@ -34,9 +34,31 @@ pub struct OutgoingRequestBody {
     pub action: Option<&'static str>,
 }
 
-impl OutgoingRequestBody {
-    pub fn new((action, bot_type): &(DealAction, BotType)) -> OutgoingRequestBody {
-        OutgoingRequestBody {
+pub type ExecutionResult = Result<reqwest::Response, reqwest::Error>;
+
+// Could I do this with a new struct type and an Into trait or something?
+// impl ExecutionResult {
+//     fn log(&self) {
+//         if self.is_ok() && self.unwrap().status().is_success() {
+//             info!("{} request successful!", self.action);
+//         }
+//     }
+// }
+
+pub fn log_execution_result(request: &OutgoingRequest, result: ExecutionResult) {
+    if result.is_ok() && result.unwrap().status().is_success() {
+        info!("{:?} request successful!", request.action);
+    }
+}
+
+impl OutgoingRequest {
+    pub fn new((action, bot_type): &(DealAction, BotType)) -> OutgoingRequest {
+        info!(
+            "Generating {:?} request.",
+            (action, bot_type),
+        );
+
+        OutgoingRequest {
             message_type: "bot",
             bot_id: match bot_type {
                 BotType::Long => get_settings().long_bot_id,
@@ -50,15 +72,31 @@ impl OutgoingRequestBody {
             },
         }
     }
-}
 
-pub async fn execute_request(request: OutgoingRequestBody) -> Result<Response, reqwest::Error> {
-    let url: &str = &request_url();
-    let client: Client = Client::new();
-    let result = client.post(url).json(&request).send().await?;
-    Ok(result)
-}
+    /// Executes the action http request!
+    pub async fn execute(&self) -> ExecutionResult {
+        info!(
+            "Executing {:?} Request with: {:?}",
+            self.action,
+            self
+        );
 
+        #[cfg(test)]
+        let _mock = OutgoingRequest::mock_request();
+
+        let url: &str = &request_url();
+        let client: reqwest::Client = reqwest::Client::new();
+        let result = client.post(url).json(self).send().await?;
+        Ok(result)
+    }
+
+    #[cfg(test)]
+    fn mock_request() -> mockito::Mock {
+        mockito::mock("POST", "/")
+            .with_status(200)
+            .create()
+    }
+}
 
 
 #[cfg(test)]
@@ -73,7 +111,7 @@ mod data_tests {
     #[test]
     fn start_json_is_correct() {
         assert_eq!(
-            to_string(&OutgoingRequestBody::new(&(
+            to_string(&OutgoingRequest::new(&(
                 DealAction::Start,
                 BotType::Long
             )))
@@ -85,7 +123,7 @@ mod data_tests {
     #[test]
     fn close_json_is_correct() {
         assert_eq!(
-            to_string(&OutgoingRequestBody::new(&(
+            to_string(&OutgoingRequest::new(&(
                 DealAction::Close,
                 BotType::Long
             )))
@@ -126,7 +164,7 @@ mod request_tests {
 
     #[tokio::test]
     async fn correct_post() {
-        let good_json = OutgoingRequestBody::new(&(DealAction::Start, BotType::Long));
+        let good_json = OutgoingRequest::new(&(DealAction::Start, BotType::Long));
         let good_json_str = String::from(CORRECT_LONG_START_JSON);
 
         let _m = mock("POST", "/")
@@ -135,7 +173,7 @@ mod request_tests {
             .match_body(Matcher::JsonString(good_json_str))
             .create();
 
-        let result_good: Result<Response, reqwest::Error> = execute_request(good_json).await;
+        let result_good = good_json.execute().await;
         _m.assert();
         assert!(result_good.is_ok());
         assert_eq!(result_good.unwrap().status(), reqwest::StatusCode::OK)

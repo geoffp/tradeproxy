@@ -12,10 +12,8 @@ mod settings;
 use chrono::prelude::Local;
 use flexi_logger::{Age, Cleanup, Criterion, Duplicate, LogTarget, Logger, Naming};
 use futures::executor::block_on;
-use incoming::{IncomingSignal, SignalAction};
+use incoming::IncomingSignal;
 use log::{error, info};
-use outgoing::{BotType, DealAction, OutgoingRequestBody, execute_request};
-use serde_json::to_string_pretty;
 pub use settings::{get_settings, Settings, SETTINGS};
 use std::{collections::HashSet, convert::Infallible, result::Result};
 use warp::{
@@ -23,22 +21,7 @@ use warp::{
     reply, Filter, Rejection, Reply,
 };
 
-fn create_actions(action: SignalAction) -> [(DealAction, BotType); 2] {
-    match action {
-        SignalAction::Buy => [
-            (DealAction::Start, BotType::Long),
-            (DealAction::Close, BotType::Short),
-        ],
-        SignalAction::Sell => [
-            (DealAction::Close, BotType::Long),
-            (DealAction::Start, BotType::Short),
-        ],
-    }
-}
-
-fn request_str_for_action(deal_action_pair: &(DealAction, BotType)) -> String {
-    to_string_pretty(&OutgoingRequestBody::new(deal_action_pair)).unwrap()
-}
+use crate::outgoing::log_execution_result;
 
 fn get_real_remote_ip<'a>(headers: &'a HeaderMap) -> &str {
     let error_message = "[Remote address unknown]";
@@ -96,24 +79,11 @@ fn get_json() -> impl Filter<Extract = (IncomingSignal,), Error = warp::Rejectio
 
 fn handle_signal(signal: IncomingSignal) {
     info!("Got signal: {:?}", signal);
-    for action in create_actions(signal.action).iter() {
-        let request_json: OutgoingRequestBody = OutgoingRequestBody::new(action);
-        // Log the request
-        info!(
-            "Generating {:?} request: {}",
-            action,
-            request_str_for_action(action)
-        );
 
-        if cfg!(not(test)) {
-            let result = block_on(execute_request(request_json));
-            info!(
-                "Request for {:?} said: {:?}",
-                action,
-                result
-            )
-        };
-    }
+    signal.to_requests().iter().for_each(|request| {
+        let result = block_on(request.execute());
+        log_execution_result(request, result);
+    });
 }
 
 fn ok_result() -> warp::reply::WithStatus<&'static str> {
