@@ -11,11 +11,11 @@ mod settings;
 
 use chrono::prelude::Local;
 use flexi_logger::{Age, Cleanup, Criterion, Duplicate, LogTarget, Logger, Naming};
-use futures::executor::block_on;
+use futures::FutureExt;
 use incoming::IncomingSignal;
 use log::{error, info};
 pub use settings::{get_settings, Settings, SETTINGS};
-use std::{collections::HashSet, convert::Infallible, result::Result};
+use std::{collections::HashSet, convert::Infallible,  result::Result};
 use warp::{
     http::{HeaderMap, Method, StatusCode},
     reply, Filter, Rejection, Reply,
@@ -75,16 +75,14 @@ fn get_json() -> impl Filter<Extract = (IncomingSignal,), Error = warp::Rejectio
         })
 }
 
-fn handle_signal(signal: IncomingSignal) {
+async fn handle_signal(signal: IncomingSignal) {
     info!("Got signal: {:?}", signal);
     let requests = signal.to_requests();
     let iter = requests.into_iter();
-
-    iter.for_each(|request| {
-        let execution_result = request.execute();
-        let result = block_on(execution_result);
-        result.log();
-    });
+    for request in iter {
+        let er = request.execute().await;
+        er.log();
+    }
 }
 
 fn ok_result() -> warp::reply::WithStatus<&'static str> {
@@ -95,6 +93,7 @@ fn ok_result() -> warp::reply::WithStatus<&'static str> {
 fn entire_api() -> impl Filter<Extract = (impl Reply,), Error = Infallible> + Copy + Send {
     get_json()
         .map(handle_signal)
+        .map(|_|{})
         .untuple_one()
         .map(ok_result)
         .recover(handle_error)

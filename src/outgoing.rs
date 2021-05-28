@@ -45,7 +45,6 @@ pub struct ExecutionResult {
 }
 
 impl ExecutionResult {
-
     pub fn new(result: ReqwestResult, request: OutgoingRequest) -> ExecutionResult {
         ExecutionResult {
             request,
