@@ -11,7 +11,6 @@ mod settings;
 
 use chrono::prelude::Local;
 use flexi_logger::{Age, Cleanup, Criterion, Duplicate, LogTarget, Logger, Naming};
-use futures::FutureExt;
 use incoming::IncomingSignal;
 use log::{error, info};
 pub use settings::{get_settings, Settings, SETTINGS};
@@ -93,7 +92,7 @@ fn ok_result() -> warp::reply::WithStatus<&'static str> {
 fn entire_api() -> impl Filter<Extract = (impl Reply,), Error = Infallible> + Copy + Send {
     get_json()
         .map(handle_signal)
-        .map(|_|{})
+        .map(|_|{}) // consume the Future
         .untuple_one()
         .map(ok_result)
         .recover(handle_error)

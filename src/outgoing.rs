@@ -151,7 +151,6 @@ mod data_tests {
 #[cfg(test)]
 mod request_tests {
     use super::*;
-    use data_tests::CORRECT_LONG_START_JSON;
     use reqwest::Client;
     use serde_json::json;
     use httpmock::MockServer;
