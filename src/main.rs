@@ -21,9 +21,7 @@ use warp::{
     reply, Filter, Rejection, Reply,
 };
 
-use crate::outgoing::log_execution_result;
-
-fn get_real_remote_ip<'a>(headers: &'a HeaderMap) -> &str {
+fn get_real_remote_ip(headers: &'_ HeaderMap) -> &str {
     let error_message = "[Remote address unknown]";
 
     let real_ip_header = headers.get("x-real-ip");
@@ -79,10 +77,13 @@ fn get_json() -> impl Filter<Extract = (IncomingSignal,), Error = warp::Rejectio
 
 fn handle_signal(signal: IncomingSignal) {
     info!("Got signal: {:?}", signal);
+    let requests = signal.to_requests();
+    let iter = requests.into_iter();
 
-    signal.to_requests().iter().for_each(|request| {
-        let result = block_on(request.execute());
-        log_execution_result(request, result);
+    iter.for_each(|request| {
+        let execution_result = request.execute();
+        let result = block_on(execution_result);
+        result.log();
     });
 }
 

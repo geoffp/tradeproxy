@@ -1,12 +1,13 @@
 use log::{info};
-use super::get_settings;
+use reqwest::{Client, Response};
+use super::{get_settings, incoming::Action};
 use serde::Serialize;
 
 pub const REQUEST_URL: &str = "https://3commas.io/trade_signal/trading_view";
 
 pub fn request_url() -> String {
     if cfg!(test) {
-        String::from(mockito::server_url())
+        mockito::server_url()
     } else {
         String::from(REQUEST_URL)
     }
@@ -34,37 +35,50 @@ pub struct OutgoingRequest {
     pub action: Option<&'static str>,
 }
 
-pub type ExecutionResult = Result<reqwest::Response, reqwest::Error>;
+pub type ReqwestResult = Result<Response, reqwest::Error>;
 
-// Could I do this with a new struct type and an Into trait or something?
-// impl ExecutionResult {
-//     fn log(&self) {
-//         if self.is_ok() && self.unwrap().status().is_success() {
-//             info!("{} request successful!", self.action);
-//         }
-//     }
-// }
+pub struct ExecutionResult {
+    request: OutgoingRequest,
+    result: ReqwestResult,
+}
 
-pub fn log_execution_result(request: &OutgoingRequest, result: ExecutionResult) {
-    if result.is_ok() && result.unwrap().status().is_success() {
-        info!("{:?} request successful!", request.action);
+impl ExecutionResult {
+
+    pub fn new(result: ReqwestResult, request: OutgoingRequest) -> ExecutionResult {
+        ExecutionResult {
+            request,
+            result,
+        }
+    }
+
+    pub fn is_success(&self) -> bool {
+        let result = &self.result;
+        result.is_ok() && result.as_ref().unwrap().status().is_success()
+    }
+
+    pub fn log(&self) {
+        if self.is_success() {
+            info!("{:?} request successful!", self.request.action);
+        }
     }
 }
 
 impl OutgoingRequest {
-    pub fn new((action, bot_type): &(DealAction, BotType)) -> OutgoingRequest {
+    pub fn new(action: Action) -> OutgoingRequest {
+        let settings = get_settings();
         info!(
             "Generating {:?} request.",
-            (action, bot_type),
+            &action,
         );
 
+        let (action, bot_type) = action;
         OutgoingRequest {
             message_type: "bot",
             bot_id: match bot_type {
-                BotType::Long => get_settings().long_bot_id,
-                BotType::Short => get_settings().short_bot_id,
+                BotType::Long => settings.long_bot_id,
+                BotType::Short => settings.short_bot_id,
             },
-            email_token: get_settings().email_token.to_string(),
+            email_token: settings.email_token.to_string(),
             delay_seconds: 0,
             action: match action {
                 DealAction::Start => None,
@@ -74,7 +88,7 @@ impl OutgoingRequest {
     }
 
     /// Executes the action http request!
-    pub async fn execute(&self) -> ExecutionResult {
+    pub async fn execute(self) -> ExecutionResult {
         info!(
             "Executing {:?} Request with: {:?}",
             self.action,
@@ -85,9 +99,9 @@ impl OutgoingRequest {
         let _mock = OutgoingRequest::mock_request();
 
         let url: &str = &request_url();
-        let client: reqwest::Client = reqwest::Client::new();
-        let result = client.post(url).json(self).send().await?;
-        Ok(result)
+        let client: Client = Client::new();
+        let result: ReqwestResult = client.post(url).json(&self).send().await;
+        ExecutionResult::new(result, self)
     }
 
     #[cfg(test)]

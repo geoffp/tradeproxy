@@ -14,23 +14,34 @@ pub struct IncomingSignal {
     pub contracts: f64,
 }
 
+pub type Action = (DealAction, BotType);
+pub type ActionPair = (Action, Action);
+
 impl IncomingSignal {
     pub fn to_requests(&self) -> Vec<OutgoingRequest> {
-        self.create_actions().iter()
-            .map(|action_pair| OutgoingRequest::new(action_pair))
-            .collect()
+        let action_pair = self.create_actions();
+        let (action1, action2) = action_pair;
+
+        vec![
+            OutgoingRequest::new(action1),
+            OutgoingRequest::new(action2),
+        ]
     }
 
-    fn create_actions(&self) -> Vec<(DealAction, BotType)> {
+    fn create_actions(&self) -> ActionPair {
+        use BotType::*;
+        use DealAction::*;
+        use SignalAction::*;
+
         match self.action {
-            SignalAction::Buy => vec![
-                (DealAction::Start, BotType::Long),
-                (DealAction::Close, BotType::Short),
-            ],
-            SignalAction::Sell => vec![
-                (DealAction::Close, BotType::Long),
-                (DealAction::Start, BotType::Short),
-            ],
+            Buy => (
+                (Start, Long),
+                (Close, Short)
+            ),
+            Sell => (
+                (Close, Long),
+                (Start, Short),
+            ),
         }
     }
 }
