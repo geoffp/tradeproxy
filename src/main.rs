@@ -147,17 +147,30 @@ mod tests {
 
     #[tokio::test]
     async fn it_accepts_valid_json() {
-        assert!(mock_request().body(GOOD_JSON).matches(&get_json()).await);
+        assert!(request()
+                .path("/trade")
+                .method("POST")
+                .body(GOOD_JSON)
+                .matches(&get_json())
+                .await
+        );
     }
 
     #[tokio::test]
     async fn it_rejects_bad_json() {
         let filter = get_json();
 
-        assert!(!mock_request().body("blah blah blah").matches(&filter).await);
+        assert!(!request()
+                .path("/trade")
+                .method("POST")
+                .body("blah blah blah")
+                .matches(&filter)
+                .await);
 
         assert!(
-            !mock_request()
+            !request()
+                .path("/trade")
+                .method("POST")
                 .body(r#"{"wrong": "json"}"#)
                 .matches(&get_json())
                 .await
@@ -167,7 +180,9 @@ mod tests {
     #[tokio::test]
     async fn it_accepts_unnecesary_fields_in_json() {
         assert!(
-            mock_request()
+            request()
+                .path("/trade")
+                .method("POST")
                 .body(r#"{"action": "buy", "contracts": 1, "extra": 42}"#)
                 .matches(&get_json())
                 .await
@@ -177,7 +192,9 @@ mod tests {
     #[tokio::test]
     async fn it_returns_bad_request_for_malformed_json() {
         assert_eq!(
-            mock_request()
+            request()
+                .path("/trade")
+                .method("POST")
                 .body("blah blah blah")
                 .filter(&entire_api())
                 .await
@@ -191,7 +208,8 @@ mod tests {
     #[tokio::test]
     async fn it_returns_ok_for_good_json() {
         assert_eq!(
-            mock_request()
+            request()
+                .path("/trade")
                 .method("POST")
                 .body(&GOOD_JSON)
                 .filter(&entire_api())
@@ -206,7 +224,8 @@ mod tests {
     #[tokio::test]
     async fn it_returns_bad_request_for_get_request() {
         assert_eq!(
-            mock_request()
+            request()
+                .path("/trade")
                 .method("GET")
                 .filter(&entire_api())
                 .await
@@ -220,7 +239,8 @@ mod tests {
     #[tokio::test]
     async fn it_rejects_a_put() {
         assert_eq!(
-            mock_request()
+            request()
+                .path("/trade")
                 .method("PUT")
                 .body(&GOOD_JSON)
                 .filter(&entire_api())

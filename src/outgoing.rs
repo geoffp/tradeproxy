@@ -1,17 +1,19 @@
-use log::{info};
+use log::info;
 use reqwest::{Client, Response};
 use super::{get_settings, incoming::Action};
 use serde::Serialize;
 
-pub const REQUEST_URL: &str = "https://3commas.io/trade_signal/trading_view";
-
-pub fn request_url() -> String {
-    if cfg!(test) {
-        mockito::server_url()
-    } else {
-        String::from(REQUEST_URL)
-    }
+pub fn request_server() -> String {
+    "https://3commas.io".into()
 }
+
+pub fn request_path() -> String {
+    "/trade_signal/trading_view".into()
+}
+
+// pub fn request_full_url() -> String {
+//     format!("{}{}", request_server(), request_path())
+// }
 
 #[derive(Debug)]
 pub enum DealAction {
@@ -51,14 +53,19 @@ impl ExecutionResult {
         }
     }
 
+    pub fn status(&self) -> reqwest::StatusCode {
+        self.result.as_ref().unwrap().status()
+    }
+
     pub fn is_success(&self) -> bool {
-        let result = &self.result;
-        result.is_ok() && result.as_ref().unwrap().status().is_success()
+        self.status().is_success()
     }
 
     pub fn log(&self) {
         if self.is_success() {
             info!("{:?} request successful!", self.request.action);
+        } else {
+            info!("{:?} request failed. :(", self.request.action);
         }
     }
 }
@@ -89,26 +96,20 @@ impl OutgoingRequest {
 
     /// Executes the action http request!
     pub async fn execute(self) -> ExecutionResult {
+        self.execute_with_server(request_server()).await
+    }
+
+    pub async fn execute_with_server(self, server: String) -> ExecutionResult {
         info!(
             "Executing {:?} Request with: {:?}",
             self.action,
             self
         );
 
-        #[cfg(test)]
-        let _mock = OutgoingRequest::mock_request();
-
-        let url: &str = &request_url();
+        let url = format!("{}{}", server, request_path());
         let client: Client = Client::new();
         let result: ReqwestResult = client.post(url).json(&self).send().await;
         ExecutionResult::new(result, self)
-    }
-
-    #[cfg(test)]
-    fn mock_request() -> mockito::Mock {
-        mockito::mock("POST", "/")
-            .with_status(200)
-            .create()
     }
 }
 
@@ -116,7 +117,6 @@ impl OutgoingRequest {
 #[cfg(test)]
 mod data_tests {
     use super::*;
-    use serde_json::ser::to_string;
 
     // These just test long bots
     pub const CORRECT_LONG_START_JSON: &str = r#"{"message_type":"bot","bot_id":1234567,"email_token":"89abcdef-789a-bcde-f012-456789abcdef","delay_seconds":0}"#;
@@ -124,11 +124,12 @@ mod data_tests {
 
     #[test]
     fn start_json_is_correct() {
+        let request = OutgoingRequest::new((
+            DealAction::Start,
+            BotType::Long
+        ));
         assert_eq!(
-            to_string(&OutgoingRequest::new(&(
-                DealAction::Start,
-                BotType::Long
-            )))
+            serde_json::to_string(&request)
             .unwrap(),
             CORRECT_LONG_START_JSON
         );
@@ -136,11 +137,12 @@ mod data_tests {
 
     #[test]
     fn close_json_is_correct() {
+        let request = OutgoingRequest::new((
+            DealAction::Close,
+            BotType::Long
+        ));
         assert_eq!(
-            to_string(&OutgoingRequest::new(&(
-                DealAction::Close,
-                BotType::Long
-            )))
+            serde_json::to_string(&request)
             .unwrap(),
             CORRECT_LONG_CLOSE_JSON
         );
@@ -151,65 +153,54 @@ mod data_tests {
 mod request_tests {
     use super::*;
     use data_tests::CORRECT_LONG_START_JSON;
-    use mockito::{mock, Matcher};
-    use reqwest::{get, Client, Response};
+    use reqwest::Client;
     use serde_json::json;
-
-    #[tokio::test]
-    async fn hello_world() {
-        let _m = mock("GET", "/")
-            .with_status(200)
-            .with_header("content-type", "text/plain")
-            .with_body("hello world")
-            .create();
-
-        async fn req() -> Result<String, reqwest::Error> {
-            let url: &str = &request_url();
-            let result = get(url).await?.text().await?;
-            Ok(result)
-        }
-
-        let result = req().await;
-
-        assert!(result.is_ok());
-        _m.assert();
-        assert_eq!(result.unwrap().as_str(), "hello world");
-    }
+    use httpmock::MockServer;
 
     #[tokio::test]
     async fn correct_post() {
-        let good_json = OutgoingRequest::new(&(DealAction::Start, BotType::Long));
-        let good_json_str = String::from(CORRECT_LONG_START_JSON);
+        let good_json = OutgoingRequest::new((DealAction::Start, BotType::Long));
+        // let good_json_str = String::from(CORRECT_LONG_START_JSON);
 
-        let _m = mock("POST", "/")
-            .with_status(200)
-            .with_header("content-type", "application/json")
-            .match_body(Matcher::JsonString(good_json_str))
-            .create();
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method("POST")
+                .path("/trade_signal/trading_view")
+                .header("Content-Type", "application/json");
+            then.status(200)
+                .body("Success!");
+        });
 
-        let result_good = good_json.execute().await;
-        _m.assert();
-        assert!(result_good.is_ok());
-        assert_eq!(result_good.unwrap().status(), reqwest::StatusCode::OK)
+        let result_good = good_json.execute_with_server(server.base_url()).await;
+
+        mock.assert();
+
+        assert!(result_good.is_success());
     }
 
     #[tokio::test]
     async fn bad_post() {
         let bad_json = json!({"like": "whatever"});
 
-        let _m = mock("POST", "/")
-            .with_header("content-type", "application/json")
-            .match_body(Matcher::JsonString(String::from(CORRECT_LONG_START_JSON)))
-            .create();
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method("POST")
+                .path("/trade_signal/trading_view")
+                .header("Content-Type", "application/json");
+            then.status(200)
+                .body("Success!");
+        });
 
-        async fn req_bad(bad_json: &serde_json::Value) -> Result<Response, reqwest::Error> {
-            let url: &str = &request_url();
+        async fn req_bad(bad_json: &serde_json::Value, base_url: String) -> ReqwestResult {
+            let url: String = format!("{}{}", base_url, request_path());
             let client: Client = Client::new();
             let result = client.post(url).json(bad_json).send().await?;
+
             Ok(result)
         }
 
-        let result_bad: Result<Response, reqwest::Error> = req_bad(&bad_json).await;
+        let result_bad: ReqwestResult = req_bad(&bad_json, server.base_url()).await;
+        mock.assert();
         assert_eq!(result_bad.unwrap().status(), reqwest::StatusCode::NOT_IMPLEMENTED);
     }
 }
