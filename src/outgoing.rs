@@ -1,4 +1,5 @@
 use log::info;
+use serde::Deserialize;
 use reqwest::{Client, Response};
 use super::{get_settings, incoming::Action};
 use serde::Serialize;
@@ -27,14 +28,14 @@ pub enum BotType {
     Short,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct OutgoingRequest {
-    pub message_type: &'static str,
+    pub message_type: String,
     pub bot_id: u64,
     pub email_token: String,
     pub delay_seconds: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub action: Option<&'static str>,
+    pub action: Option<String>,
 }
 
 pub type ReqwestResult = Result<Response, reqwest::Error>;
@@ -79,7 +80,7 @@ impl OutgoingRequest {
 
         let (action, bot_type) = action;
         OutgoingRequest {
-            message_type: "bot",
+            message_type: "bot".into(),
             bot_id: match bot_type {
                 BotType::Long => settings.long_bot_id,
                 BotType::Short => settings.short_bot_id,
@@ -88,7 +89,7 @@ impl OutgoingRequest {
             delay_seconds: 0,
             action: match action {
                 DealAction::Start => None,
-                DealAction::Close => Some("close_at_market_price"),
+                DealAction::Close => Some("close_at_market_price".into()),
             },
         }
     }
@@ -153,7 +154,16 @@ mod request_tests {
     use super::*;
     use reqwest::Client;
     use serde_json::json;
-    use httpmock::MockServer;
+    use httpmock::{MockServer, HttpMockRequest};
+
+    fn request_is_valid_json(req: &HttpMockRequest) -> bool {
+        if req.body.is_none() { return false; };
+        let bytes: &Vec<u8> = req.body.as_ref().unwrap();
+        let s: String = String::from_utf8_lossy(&bytes).into_owned();
+        let or: Result<OutgoingRequest, serde_json::Error> = serde_json::from_str(&s);
+        if or.is_err() { return false; }
+        return true;
+    }
 
     #[tokio::test]
     async fn correct_post() {
@@ -164,7 +174,10 @@ mod request_tests {
         let mock = server.mock(|when, then| {
             when.method("POST")
                 .path("/trade_signal/trading_view")
-                .header("Content-Type", "application/json");
+                .header("Content-Type", "application/json")
+                .matches(|req| {
+                    request_is_valid_json(&req)
+                });
             then.status(200)
                 .body("Success!");
         });
@@ -184,9 +197,12 @@ mod request_tests {
         let mock = server.mock(|when, then| {
             when.method("POST")
                 .path("/trade_signal/trading_view")
-                .header("Content-Type", "application/json");
-            then.status(200)
-                .body("Success!");
+                .header("Content-Type", "application/json")
+                .matches(|req| {
+                    !request_is_valid_json(&req)
+                });
+            then.status(501)
+                .body("Fail!");
         });
 
         async fn req_bad(bad_json: &serde_json::Value, base_url: String) -> ReqwestResult {
@@ -199,6 +215,6 @@ mod request_tests {
 
         let result_bad: ReqwestResult = req_bad(&bad_json, server.base_url()).await;
         mock.assert();
-        assert_eq!(result_bad.unwrap().status(), reqwest::StatusCode::NOT_IMPLEMENTED);
+        assert!(result_bad.unwrap().status().is_server_error());
     }
 }
