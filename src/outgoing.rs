@@ -41,13 +41,13 @@ pub enum BotType {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct OutgoingRequest {
-    pub message_type: String,
-    pub bot_id: u64,
-    pub email_token: String,
-    pub delay_seconds: u64,
     #[serde(default)]
     #[serde(skip_serializing_if = "DealAction::is_start")]
     pub action: DealAction,
+    pub bot_id: u64,
+    pub delay_seconds: u64,
+    pub email_token: String,
+    pub message_type: String,
 }
 
 pub type ReqwestResult = Result<Response, reqwest::Error>;
@@ -132,8 +132,8 @@ mod data_tests {
     use super::*;
 
     // These just test long bots
-    pub const CORRECT_LONG_START_JSON: &str = r#"{"message_type":"bot","bot_id":1234567,"email_token":"89abcdef-789a-bcde-f012-456789abcdef","delay_seconds":0}"#;
-    pub const CORRECT_LONG_CLOSE_JSON: &str = r#"{"message_type":"bot","bot_id":1234567,"email_token":"89abcdef-789a-bcde-f012-456789abcdef","delay_seconds":0,"action":"close_at_market_price"}"#;
+    pub const CORRECT_LONG_START_JSON: &str = r#"{"bot_id":1234567,"delay_seconds":0,"email_token":"89abcdef-789a-bcde-f012-456789abcdef","message_type":"bot"}"#;
+    pub const CORRECT_LONG_CLOSE_JSON: &str = r#"{"action":"close_at_market_price","bot_id":1234567,"delay_seconds":0,"email_token":"89abcdef-789a-bcde-f012-456789abcdef","message_type":"bot"}"#;
 
     #[test]
     fn start_json_is_correct() {
@@ -169,13 +169,23 @@ mod request_tests {
     use serde_json::json;
     use httpmock::{MockServer, HttpMockRequest};
 
+    fn get_string_from_request(req: &HttpMockRequest) -> String {
+        let bytes: &Vec<u8> = req.body.as_ref().unwrap();
+        String::from_utf8_lossy(&bytes).into_owned()
+    }
+
     fn request_is_valid_json(req: &HttpMockRequest) -> bool {
         if req.body.is_none() { return false; };
-        let bytes: &Vec<u8> = req.body.as_ref().unwrap();
-        let s: String = String::from_utf8_lossy(&bytes).into_owned();
-        let or: Result<OutgoingRequest, serde_json::Error> = serde_json::from_str(&s);
-        if or.is_err() { return false; }
-        return true;
+        let s: String = get_string_from_request(req);
+
+        // let or: Result<OutgoingRequest, serde_json::Error> = serde_json::from_str(&s);
+        let known_good_requests: Vec<String> = vec![
+            String::from(data_tests::CORRECT_LONG_CLOSE_JSON),
+            String::from(data_tests::CORRECT_LONG_START_JSON),
+        ];
+
+        if known_good_requests.contains(&s) { return true; }
+        return false;
     }
 
     #[tokio::test]
