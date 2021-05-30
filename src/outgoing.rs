@@ -198,9 +198,7 @@ mod request_tests {
             when.method("POST")
                 .path("/trade_signal/trading_view")
                 .header("Content-Type", "application/json")
-                .matches(|req| {
-                    request_is_valid_json(&req)
-                });
+                .matches(|req| request_is_valid_json(&req));
             then.status(200)
                 .body("Success!");
         });
@@ -221,9 +219,7 @@ mod request_tests {
             when.method("POST")
                 .path("/trade_signal/trading_view")
                 .header("Content-Type", "application/json")
-                .matches(|req| {
-                    !request_is_valid_json(&req)
-                });
+                .matches(|req| !request_is_valid_json(&req));
             then.status(501)
                 .body("Fail!");
         });
