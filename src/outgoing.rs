@@ -1,8 +1,7 @@
 use log::info;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use reqwest::{Client, Response};
 use super::{get_settings, incoming::Action};
-use serde::Serialize;
 
 pub fn request_server() -> String {
     "https://3commas.io".into()
@@ -12,14 +11,26 @@ pub fn request_path() -> String {
     "/trade_signal/trading_view".into()
 }
 
-// pub fn request_full_url() -> String {
-//     format!("{}{}", request_server(), request_path())
-// }
-
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum DealAction {
     Start,
+    #[serde(rename = "close_at_market_price")]
     Close,
+}
+
+impl Default for DealAction {
+    fn default() -> Self {
+        DealAction::Start
+    }
+}
+
+impl DealAction {
+    pub fn is_start(d: &DealAction) -> bool {
+        match d {
+            DealAction::Start => true,
+            _ => false
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -34,8 +45,9 @@ pub struct OutgoingRequest {
     pub bot_id: u64,
     pub email_token: String,
     pub delay_seconds: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub action: Option<String>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "DealAction::is_start")]
+    pub action: DealAction,
 }
 
 pub type ReqwestResult = Result<Response, reqwest::Error>;
@@ -87,10 +99,7 @@ impl OutgoingRequest {
             },
             email_token: settings.email_token.to_string(),
             delay_seconds: 0,
-            action: match action {
-                DealAction::Start => None,
-                DealAction::Close => Some("close_at_market_price".into()),
-            },
+            action,
         }
     }
 
