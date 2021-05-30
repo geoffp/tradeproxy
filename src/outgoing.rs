@@ -74,10 +74,14 @@ impl ExecutionResult {
     }
 
     pub fn log(&self) {
+        let action: &DealAction = &self.request.action;
+        let result: &Result<Response, reqwest::Error> = &self.result;
+        let bytes = &result.as_ref().unwrap();
+
         if self.is_success() {
-            info!("{:?} request successful!", self.request.action);
+            info!("{:?} request successful: {:?}", action, bytes);
         } else {
-            info!("{:?} request failed. :(", self.request.action);
+            info!("{:?} request failed :( :{:?}", action, bytes);
         }
     }
 }
