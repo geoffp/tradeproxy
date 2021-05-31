@@ -26,10 +26,7 @@ impl Default for DealAction {
 
 impl DealAction {
     pub fn is_start(d: &DealAction) -> bool {
-        match d {
-            DealAction::Start => true,
-            _ => false
-        }
+        matches!(d, DealAction::Start)
     }
 }
 
