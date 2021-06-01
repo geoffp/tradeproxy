@@ -14,6 +14,7 @@ use flexi_logger::{Age, Cleanup, Criterion, Duplicate, LogTarget, Logger, Naming
 use incoming::IncomingSignal;
 use log::{error, info};
 pub use settings::{get_settings, Settings, SETTINGS};
+use tokio::time::{Duration, sleep};
 use std::{collections::HashSet, convert::Infallible,  result::Result};
 use warp::{
     http::{HeaderMap, Method, StatusCode},
@@ -74,14 +75,16 @@ fn get_json() -> impl Filter<Extract = (IncomingSignal,), Error = warp::Rejectio
         })
 }
 
-async fn handle_signal(signal: IncomingSignal) {
+async fn handle_signal(signal: IncomingSignal) -> Result<(), Infallible> {
     info!("Got signal: {:?}", signal);
     let requests = signal.to_requests();
     let iter = requests.into_iter();
     for request in iter {
         let er = request.execute().await;
         er.log();
+        sleep(Duration::from_secs(5)).await;
     }
+    Ok(())
 }
 
 fn ok_result() -> warp::reply::WithStatus<&'static str> {
@@ -91,8 +94,7 @@ fn ok_result() -> warp::reply::WithStatus<&'static str> {
 
 fn entire_api() -> impl Filter<Extract = (impl Reply,), Error = Infallible> + Copy + Send {
     get_json()
-        .map(handle_signal)
-        .map(|_|{}) // consume the Future
+        .and_then(handle_signal)
         .untuple_one()
         .map(ok_result)
         .recover(handle_error)
