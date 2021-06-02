@@ -1,6 +1,6 @@
-use log::{debug, info};
+use log::info;
 use serde::{Deserialize, Serialize};
-use reqwest::{Client, Response};
+use reqwest::Client;
 use super::{get_settings, incoming::Action};
 mod execution_result;
 use execution_result::*;
@@ -30,7 +30,7 @@ pub struct OutgoingRequest {
 
 
 impl OutgoingRequest {
-    pub fn new(action: Action) -> OutgoingRequest {
+    pub fn new(action: Action) -> Self {
         let settings = get_settings();
         info!(
             "Generating {:?} request.",

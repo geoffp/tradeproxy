@@ -10,7 +10,7 @@ pub struct ExecutionResult {
 }
 
 impl ExecutionResult {
-    pub fn new(result: ReqwestResult, request: OutgoingRequest) -> ExecutionResult {
+    pub fn new(result: ReqwestResult, request: OutgoingRequest) -> Self {
         ExecutionResult {
             request,
             result,
