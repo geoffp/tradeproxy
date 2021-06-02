@@ -10,14 +10,36 @@ use std::{
 };
 
 #[derive(Debug, Deserialize)]
+#[serde(default)]
 pub struct Settings {
     pub listen_port: u16,
-    pub log_dir: String,
     pub long_bot_id: u64,
     pub short_bot_id: u64,
     pub email_token: String,
     pub tradingview_api_ips: HashSet<String>,
-    pub log_path: Option<String>,
+    pub log_path: String,
+    pub request_server: String,
+    pub request_path: String,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            email_token: "89abcdef-789a-bcde-f012-456789abcdef".into(),
+            listen_port: 3137,
+            log_path: ".".into(),
+            long_bot_id: 1234567,
+            request_path: "/trade_signal/trading_view".into(),
+            request_server: "localhost".into(),
+            short_bot_id: 7654321,
+            tradingview_api_ips: [
+                "52.89.214.238",
+                "34.212.75.30",
+                "54.218.53.128",
+                "52.32.178.7",
+            ].iter().cloned().map(String::from).collect(),
+        }
+    }
 }
 
 impl Settings {
@@ -46,7 +68,7 @@ impl Settings {
         // This file shouldn't be checked in to git
         // AND it should only be loaded when we're not running unit tests -- in that case, we should use the defaults
 
-        let mut log_dir_str: Option<String> = None;
+
 
         let tp_config_dir = if cfg!(test) {
             None
@@ -58,20 +80,29 @@ impl Settings {
 
         eprintln!("Config dir: {:?}", tp_config_dir);
 
-        if let Some(dir) = &tp_config_dir {
-            log_dir_str = dir.join("log").to_str().map(String::from);
-            let config_path = dir.join("config.yaml");
+        // If we've found a user config directory:
+        // - Set up the log path
+        // - Find the config file's path
+        // - Merge that file into self
+        let log_dir: String = if let Some(config_dir) = &tp_config_dir {
+            let config_file_path = config_dir.join("config.yaml");
             s.merge(
-                File::from(config_path)
+                File::from(config_file_path)
                     .format(FileFormat::Yaml)
                     .required(true),
             )?;
+
+            // Return the log directory
+            config_dir.join("log").to_str().unwrap().into()
+        } else {
+            // If there's not user config directory, we must log...here
+            ".".into()
         };
 
-        s.set("log_path", log_dir_str).unwrap();
+        s.set("log_path", log_dir).unwrap();
 
-        // Add in settings from the environment (with a prefix of APP)
-        // Eg.. `APP_DEBUG=1 ./target/app` would set the `debug` key
+        // Add in settings from the environment (with a prefix of TP)
+        // Eg.. `TP_DEBUG=1 ./target/app` would set the `debug` key
         s.merge(Environment::with_prefix("tp"))?;
 
         // You can deserialize (and thus freeze) the entire configuration as
