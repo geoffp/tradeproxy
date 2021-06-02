@@ -1,7 +1,12 @@
-use log::info;
+use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use reqwest::{Client, Response};
 use super::{get_settings, incoming::Action};
+mod execution_result;
+use execution_result::*;
+pub mod deal_and_bot_types;
+use deal_and_bot_types::*;
+
 
 pub fn request_server() -> String {
     "https://3commas.io".into()
@@ -11,30 +16,6 @@ pub fn request_path() -> String {
     "/trade_signal/trading_view".into()
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub enum DealAction {
-    Start,
-    #[serde(rename = "close_at_market_price")]
-    Close,
-}
-
-impl Default for DealAction {
-    fn default() -> Self {
-        DealAction::Start
-    }
-}
-
-impl DealAction {
-    pub fn is_start(d: &DealAction) -> bool {
-        matches!(d, DealAction::Start)
-    }
-}
-
-#[derive(Debug)]
-pub enum BotType {
-    Long,
-    Short,
-}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct OutgoingRequest {
@@ -47,41 +28,6 @@ pub struct OutgoingRequest {
     pub message_type: String,
 }
 
-pub type ReqwestResult = Result<Response, reqwest::Error>;
-
-pub struct ExecutionResult {
-    request: OutgoingRequest,
-    result: ReqwestResult,
-}
-
-impl ExecutionResult {
-    pub fn new(result: ReqwestResult, request: OutgoingRequest) -> ExecutionResult {
-        ExecutionResult {
-            request,
-            result,
-        }
-    }
-
-    pub fn status(&self) -> reqwest::StatusCode {
-        self.result.as_ref().unwrap().status()
-    }
-
-    pub fn is_success(&self) -> bool {
-        self.status().is_success()
-    }
-
-    pub fn log(&self) {
-        let action: &DealAction = &self.request.action;
-        let result: &Result<Response, reqwest::Error> = &self.result;
-        let bytes = &result.as_ref().unwrap();
-
-        if self.is_success() {
-            info!("{:?} request successful: {:?}", action, bytes);
-        } else {
-            info!("{:?} request failed :( :{:?}", action, bytes);
-        }
-    }
-}
 
 impl OutgoingRequest {
     pub fn new(action: Action) -> OutgoingRequest {

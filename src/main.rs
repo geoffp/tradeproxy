@@ -5,7 +5,7 @@ extern crate chrono;
 extern crate lazy_static;
 extern crate serde_derive;
 
-mod incoming;
+pub mod incoming;
 mod outgoing;
 mod settings;
 
@@ -78,6 +78,7 @@ fn get_json() -> impl Filter<Extract = (IncomingSignal,), Error = warp::Rejectio
 async fn handle_signal(signal: IncomingSignal) -> Result<(), Infallible> {
     info!("Got signal: {:?}", signal);
     let requests = signal.to_requests();
+    info!("Signal results in requests: {:?}", requests);
     let iter = requests.into_iter();
     for request in iter {
         let er = request.execute().await;

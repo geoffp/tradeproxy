@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use super::outgoing::{OutgoingRequest, DealAction, BotType};
+use super::outgoing::{OutgoingRequest, deal_and_bot_types::{DealAction, BotType}};
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
