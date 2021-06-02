@@ -30,14 +30,10 @@ pub struct OutgoingRequest {
 
 
 impl OutgoingRequest {
-    pub fn new(action: Action) -> Self {
+    pub fn new((action, bot_type): Action) -> Self {
         let settings = get_settings();
-        info!(
-            "Generating {:?} request.",
-            &action,
-        );
+        info!("Generating {:?} {:?} request.", &bot_type, &action);
 
-        let (action, bot_type) = action;
         OutgoingRequest {
             message_type: "bot".into(),
             bot_id: bot_type.get_bot_id(),
