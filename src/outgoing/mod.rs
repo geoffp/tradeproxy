@@ -2,6 +2,7 @@ use log::info;
 use serde::{Deserialize, Serialize};
 use reqwest::Client;
 use super::{get_settings, incoming::Action};
+use crate::SETTINGS;
 mod execution_result;
 use execution_result::*;
 pub mod deal_and_bot_types;
@@ -45,7 +46,8 @@ impl OutgoingRequest {
 
     /// Executes the action http request!
     pub async fn execute(self) -> ExecutionResult {
-        self.execute_with_server(request_server()).await
+        let server = SETTINGS.read().unwrap().request_server.clone();
+        self.execute_with_server(server).await
     }
 
     pub async fn execute_with_server(self, server: String) -> ExecutionResult {
@@ -126,6 +128,7 @@ mod request_tests {
 
     #[tokio::test]
     async fn correct_post() {
+        use crate::settings::SETTINGS;
         let good_json = OutgoingRequest::new((DealAction::Start, BotType::Long));
         // let good_json_str = String::from(CORRECT_LONG_START_JSON);
 
@@ -139,7 +142,8 @@ mod request_tests {
                 .body("Success!");
         });
 
-        let result_good = good_json.execute_with_server(server.base_url()).await;
+        SETTINGS.write().unwrap().request_server = server.base_url();
+        let result_good = good_json.execute().await;
 
         mock.assert();
 
@@ -160,6 +164,8 @@ mod request_tests {
                 .body("Fail!");
         });
 
+        SETTINGS.write().unwrap().request_server = server.base_url();
+
         async fn req_bad(bad_json: &serde_json::Value, base_url: String) -> ReqwestResult {
             let url: String = format!("{}{}", base_url, request_path());
             let client: Client = Client::new();
@@ -168,7 +174,8 @@ mod request_tests {
             Ok(result)
         }
 
-        let result_bad: ReqwestResult = req_bad(&bad_json, server.base_url()).await;
+        let base_url = SETTINGS.read().unwrap().request_server.clone();
+        let result_bad: ReqwestResult = req_bad(&bad_json, base_url).await;
         mock.assert();
         assert!(result_bad.unwrap().status().is_server_error());
     }

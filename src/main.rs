@@ -94,6 +94,8 @@ fn ok_result() -> warp::reply::WithStatus<&'static str> {
 }
 
 fn entire_api() -> impl Filter<Extract = (impl Reply,), Error = Infallible> + Copy + Send {
+    // let server: String = "https://3commas.io".into();
+
     get_json()
         .and_then(handle_signal)
         .untuple_one()

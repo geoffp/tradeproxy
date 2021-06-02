@@ -29,8 +29,8 @@ impl Default for Settings {
             listen_port: 3137,
             log_path: ".".into(),
             long_bot_id: 1234567,
+            request_server: "https://3commas.io".into(),
             request_path: "/trade_signal/trading_view".into(),
-            request_server: "localhost".into(),
             short_bot_id: 7654321,
             tradingview_api_ips: [
                 "52.89.214.238",
