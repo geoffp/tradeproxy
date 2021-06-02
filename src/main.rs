@@ -7,7 +7,7 @@ extern crate serde_derive;
 
 pub mod incoming;
 mod outgoing;
-mod settings;
+pub mod settings;
 
 use chrono::prelude::Local;
 use flexi_logger::{Age, Cleanup, Criterion, Duplicate, LogTarget, Logger, Naming};

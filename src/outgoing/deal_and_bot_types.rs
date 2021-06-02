@@ -1,4 +1,5 @@
 use serde::{Serialize, Deserialize};
+use crate::settings::get_settings;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum DealAction {
@@ -23,4 +24,14 @@ impl DealAction {
 pub enum BotType {
     Long,
     Short,
+}
+
+impl BotType {
+    pub fn get_bot_id(&self) -> u64 {
+        let settings = get_settings();
+        match self {
+            BotType::Long => settings.long_bot_id,
+            BotType::Short => settings.short_bot_id,
+        }
+    }
 }

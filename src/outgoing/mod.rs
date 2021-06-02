@@ -40,10 +40,7 @@ impl OutgoingRequest {
         let (action, bot_type) = action;
         OutgoingRequest {
             message_type: "bot".into(),
-            bot_id: match bot_type {
-                BotType::Long => settings.long_bot_id,
-                BotType::Short => settings.short_bot_id,
-            },
+            bot_id: bot_type.get_bot_id(),
             email_token: settings.email_token.to_string(),
             delay_seconds: 0,
             action,
