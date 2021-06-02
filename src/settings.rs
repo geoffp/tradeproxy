@@ -67,9 +67,6 @@ impl Settings {
         // Add in a local configuration file
         // This file shouldn't be checked in to git
         // AND it should only be loaded when we're not running unit tests -- in that case, we should use the defaults
-
-
-
         let tp_config_dir = if cfg!(test) {
             None
         } else if cfg!(debug_assertions) {
@@ -85,6 +82,7 @@ impl Settings {
         // - Find the config file's path
         // - Merge that file into self
         let log_dir: String = if let Some(config_dir) = &tp_config_dir {
+            // Load up the config file
             let config_file_path = config_dir.join("config.yaml");
             s.merge(
                 File::from(config_file_path)
