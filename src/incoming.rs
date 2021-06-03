@@ -19,8 +19,7 @@ pub type ActionPair = (Action, Action);
 
 impl IncomingSignal {
     pub fn to_requests(&self) -> Vec<OutgoingRequest> {
-        let action_pair = self.create_actions();
-        let (action1, action2) = action_pair;
+        let (action1, action2) = self.create_actions();
 
         vec![
             OutgoingRequest::new(action1),
@@ -33,10 +32,11 @@ impl IncomingSignal {
         use DealAction::*;
         use SignalAction::*;
 
+        // The order of these is important! Have to close the open deal before we try to open one.
         match self.action {
             Buy => (
+                (Close, Short),
                 (Start, Long),
-                (Close, Short)
             ),
             Sell => (
                 (Close, Long),

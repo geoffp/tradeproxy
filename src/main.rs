@@ -79,8 +79,7 @@ async fn handle_signal(signal: IncomingSignal) -> Result<(), Infallible> {
     info!("Got signal: {:?}", signal);
     let requests = signal.to_requests();
     info!("Signal results in requests: {:?}", requests);
-    let iter = requests.into_iter();
-    for request in iter {
+    for request in requests.into_iter() {
         let er = request.execute().await;
         er.log();
         sleep(Duration::from_secs(5)).await;
@@ -239,5 +238,10 @@ mod tests {
                 .status(),
             StatusCode::BAD_REQUEST
         );
+    }
+
+    #[tokio::test]
+    async fn full_test() {
+
     }
 }
