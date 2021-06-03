@@ -48,10 +48,7 @@ impl Settings {
         let base_dirs = BaseDirs::new();
 
         // On Linux, this will be ~/.config
-        let user_config_dir: &Path = match &base_dirs {
-            Some(base_dirs) => base_dirs.config_dir(),
-            None => panic!("Can't find user config directory!"),
-        };
+        let user_config_dir = get_user_config_dir(&base_dirs);
 
         // Start off by merging in the "default" configuration file
         // s.merge(File::with_name("config/default"))?;
@@ -106,6 +103,14 @@ impl Settings {
         // You can deserialize (and thus freeze) the entire configuration as
         s.try_into()
     }
+}
+
+fn get_user_config_dir<'a>(base_dirs: &'a Option<BaseDirs>) -> &'a Path {
+    let user_config_dir: &'a Path = match &base_dirs {
+        Some(base_dirs) => base_dirs.config_dir(),
+        None => panic!("Can't find user config directory!"),
+    };
+    user_config_dir
 }
 
 lazy_static! {

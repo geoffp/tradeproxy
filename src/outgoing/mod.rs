@@ -8,16 +8,6 @@ use execution_result::*;
 pub mod deal_and_bot_types;
 use deal_and_bot_types::*;
 
-
-pub fn request_server() -> String {
-    "https://3commas.io".into()
-}
-
-pub fn request_path() -> String {
-    "/trade_signal/trading_view".into()
-}
-
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct OutgoingRequest {
     #[serde(default)]
@@ -28,7 +18,6 @@ pub struct OutgoingRequest {
     pub email_token: String,
     pub message_type: String,
 }
-
 
 impl OutgoingRequest {
     pub fn new((action, bot_type): Action) -> Self {
@@ -56,14 +45,13 @@ impl OutgoingRequest {
             self.action,
             self
         );
-
-        let url = format!("{}{}", server, request_path());
+        let request_path = SETTINGS.read().unwrap().request_path.clone();
+        let url = format!("{}{}", server, request_path);
         let client: Client = Client::new();
         let result: ReqwestResult = client.post(url).json(&self).send().await;
         ExecutionResult::new(result, self)
     }
 }
-
 
 #[cfg(test)]
 mod data_tests {
@@ -167,7 +155,8 @@ mod request_tests {
         SETTINGS.write().unwrap().request_server = server.base_url();
 
         async fn req_bad(bad_json: &serde_json::Value, base_url: String) -> ReqwestResult {
-            let url: String = format!("{}{}", base_url, request_path());
+            let request_path = SETTINGS.read().unwrap().request_path.clone();
+            let url: String = format!("{}{}", base_url, request_path);
             let client: Client = Client::new();
             let result = client.post(url).json(bad_json).send().await?;
 
