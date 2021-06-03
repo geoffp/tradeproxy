@@ -138,8 +138,9 @@ async fn handle_error(err: Rejection) -> Result<impl Reply, Infallible> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use httpmock::MockServer;
     use warp::test::{request, RequestBuilder};
-    const GOOD_JSON: &str = r#"{"action": "buy", "contracts": 1}"#;
+    const GOOD_SIGNAL_JSON: &str = r#"{"action": "buy", "contracts": 1}"#;
 
     fn mock_request() -> RequestBuilder {
         request().path("/trade").method("POST")
@@ -148,7 +149,7 @@ mod tests {
     #[tokio::test]
     async fn it_accepts_valid_json() {
         assert!(mock_request()
-                .body(GOOD_JSON)
+                .body(GOOD_SIGNAL_JSON)
                 .matches(&get_json())
                 .await
         );
@@ -199,7 +200,7 @@ mod tests {
     async fn it_returns_ok_for_good_json() {
         assert_eq!(
             mock_request()
-                .body(&GOOD_JSON)
+                .body(&GOOD_SIGNAL_JSON)
                 .filter(&entire_api())
                 .await
                 .unwrap()
@@ -230,7 +231,7 @@ mod tests {
             request()
                 .path("/trade")
                 .method("PUT")
-                .body(&GOOD_JSON)
+                .body(&GOOD_SIGNAL_JSON)
                 .filter(&entire_api())
                 .await
                 .unwrap()
@@ -241,7 +242,27 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn full_test() {
+    async fn makes_both_requests() {
+        use crate::settings::SETTINGS;
 
+        // Simulate the remote API
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method("POST")
+                .path("/trade_signal/trading_view")
+                .header("Content-Type", "application/json");
+            then.status(200);
+        });
+
+        SETTINGS.write().unwrap().request_server = server.base_url();
+
+        // Simulate the incoming signal
+        let incoming_signal_request = mock_request()
+            .body(&GOOD_SIGNAL_JSON)
+            .filter(&entire_api())
+            .await;
+
+        assert!(incoming_signal_request.is_ok());
+        mock.assert_hits(2);
     }
 }
