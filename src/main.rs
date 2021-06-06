@@ -103,6 +103,7 @@ async fn handle_signal(signal: IncomingSignal, server: String) -> Result<impl Re
             er.log();
             info!("[{:?}] Sleeping for 5s...", Local::now());
             sleep(Duration::from_secs(5)).await;
+            info!("Done sleeping!");
         }
     });
     info!("Generating OK result...");

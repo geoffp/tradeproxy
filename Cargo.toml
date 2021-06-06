@@ -1,6 +1,6 @@
 [package]
 name = "tradeproxy"
-version = "0.3.1"
+version = "0.3.2"
 authors = ["Geoff Pursell <geoffp@gmail.com>"]
 edition = "2018"
 
