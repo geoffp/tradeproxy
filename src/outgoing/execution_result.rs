@@ -27,7 +27,7 @@ impl ExecutionResult {
 
     pub fn log(&self) {
         let action: &DealAction = &self.request.action;
-        let result: &Result<Response, reqwest::Error> = &self.result;
+        let result: &ReqwestResult = &self.result;
         let result_bytes = &result.as_ref().unwrap();
 
         if self.is_success() {

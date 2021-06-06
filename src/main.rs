@@ -16,10 +16,7 @@ use log::{error, info};
 pub use settings::{get_settings, Settings, SETTINGS};
 use tokio::time::{Duration, sleep};
 use std::{collections::HashSet, convert::Infallible,  result::Result};
-use warp::{
-    http::{HeaderMap, Method, StatusCode},
-    reply, Filter, Rejection, Reply,
-};
+use warp::{Filter, Rejection, Reply, filters::BoxedFilter, http::{HeaderMap, Method, StatusCode}, reply};
 
 fn get_real_remote_ip(headers: &'_ HeaderMap) -> &str {
     let error_message = "[Remote address unknown]";
@@ -47,7 +44,7 @@ fn log_remote_source(remote_ip: &str) {
     }
 }
 
-fn get_json() -> impl Filter<Extract = (IncomingSignal,), Error = warp::Rejection> + Copy {
+fn get_json() -> BoxedFilter<(IncomingSignal,)> {
     warp::path!("trade")
         .and(warp::path::full())
         .and(warp::method())
@@ -70,36 +67,34 @@ fn get_json() -> impl Filter<Extract = (IncomingSignal,), Error = warp::Rejectio
         .and(warp::post())
         .and(warp::body::json())
         .map(|signal: IncomingSignal| {
-            info!("Handling signal...");
+            info!("Handling signal {:?}...", signal);
             signal
         })
+        .boxed()
 }
 
-async fn handle_signal(signal: IncomingSignal) -> Result<(), Infallible> {
+async fn handle_signal(signal: IncomingSignal, server: String) -> Result<impl Reply, Infallible>{
     info!("Got signal: {:?}", signal);
     let requests = signal.to_requests();
     info!("Signal results in requests: {:?}", requests);
-    for request in requests.into_iter() {
-        let er = request.execute().await;
+    for request in requests {
+        info!("Executing request {:?}...", &request);
+        let er = request.execute_with_server(server.clone()).await;
         er.log();
-        sleep(Duration::from_secs(5)).await;
+        // info!("Sleeping for 5s...");
+        // sleep(Duration::from_secs(5)).await;
     }
-    Ok(())
-}
-
-fn ok_result() -> warp::reply::WithStatus<&'static str> {
     info!("Generating OK result...");
-    reply::with_status("Success!", StatusCode::OK)
+    Ok(StatusCode::OK)
 }
 
-fn entire_api() -> impl Filter<Extract = (impl Reply,), Error = Infallible> + Copy + Send {
-    // let server: String = "https://3commas.io".into();
-
+fn entire_api(server: String) -> BoxedFilter<(impl Reply,)>{
     get_json()
-        .and_then(handle_signal)
-        .untuple_one()
-        .map(ok_result)
+        .and_then(move |signal| {
+            handle_signal(signal, server.clone())
+        })
         .recover(handle_error)
+        .boxed()
 }
 
 #[tokio::main]
@@ -119,7 +114,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Tradeproxy starting up! Logging to {}", log_path);
 
-    warp::serve(entire_api())
+    let server = get_settings().request_server.clone();
+
+    warp::serve(entire_api(server))
         .run(([0, 0, 0, 0], get_settings().listen_port))
         .await;
 
@@ -184,10 +181,12 @@ mod tests {
 
     #[tokio::test]
     async fn it_returns_bad_request_for_malformed_json() {
+        let server = MockServer::start();
+        let _mock = mock_remote_server(&server);
         assert_eq!(
             mock_request()
                 .body("blah blah blah")
-                .filter(&entire_api())
+                .filter(&entire_api(server.base_url()))
                 .await
                 .unwrap()
                 .into_response()
@@ -198,10 +197,12 @@ mod tests {
 
     #[tokio::test]
     async fn it_returns_ok_for_good_json() {
+        let server = MockServer::start();
+        let _mock = mock_remote_server(&server);
         assert_eq!(
             mock_request()
                 .body(&GOOD_SIGNAL_JSON)
-                .filter(&entire_api())
+                .filter(&entire_api(server.base_url()))
                 .await
                 .unwrap()
                 .into_response()
@@ -212,11 +213,13 @@ mod tests {
 
     #[tokio::test]
     async fn it_returns_bad_request_for_get_request() {
+        let server = MockServer::start();
+        let _mock = mock_remote_server(&server);
         assert_eq!(
             request()
                 .path("/trade")
                 .method("GET")
-                .filter(&entire_api())
+                .filter(&entire_api(server.base_url()))
                 .await
                 .unwrap()
                 .into_response()
@@ -227,12 +230,14 @@ mod tests {
 
     #[tokio::test]
     async fn it_rejects_a_put() {
+        let server = MockServer::start();
+        let _mock = mock_remote_server(&server);
         assert_eq!(
             request()
                 .path("/trade")
                 .method("PUT")
                 .body(&GOOD_SIGNAL_JSON)
-                .filter(&entire_api())
+                .filter(&entire_api(server.base_url()))
                 .await
                 .unwrap()
                 .into_response()
@@ -243,26 +248,26 @@ mod tests {
 
     #[tokio::test]
     async fn makes_both_requests() {
-        use crate::settings::SETTINGS;
-
-        // Simulate the remote API
+        // simulate the remote API
         let server = MockServer::start();
-        let mock = server.mock(|when, then| {
-            when.method("POST")
-                .path("/trade_signal/trading_view")
-                .header("Content-Type", "application/json");
-            then.status(200);
-        });
-
-        SETTINGS.write().unwrap().request_server = server.base_url();
+        let mock = mock_remote_server(&server);
 
         // Simulate the incoming signal
         let incoming_signal_request = mock_request()
             .body(&GOOD_SIGNAL_JSON)
-            .filter(&entire_api())
+            .filter(&entire_api(server.base_url()))
             .await;
 
         assert!(incoming_signal_request.is_ok());
         mock.assert_hits(2);
+    }
+
+    fn mock_remote_server<'a>(server: &'a MockServer) -> httpmock::MockRef<'a> {
+        server.mock(move |when, then| {
+            when.method("POST")
+                .path("/trade_signal/trading_view")
+                .header("Content-Type", "application/json");
+            then.status(200);
+        })
     }
 }
