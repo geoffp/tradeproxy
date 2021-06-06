@@ -16,7 +16,7 @@ use log::{error, info};
 use outgoing::{OutgoingRequest, deal_and_bot_types::BotType};
 pub use settings::{get_settings, Settings, SETTINGS};
 use tokio::time::{Duration, sleep};
-use std::{collections::HashSet, convert::Infallible, result::Result, thread};
+use std::{collections::HashSet, convert::Infallible, result::Result};
 use warp::{Filter, Rejection, Reply, filters::BoxedFilter, http::{HeaderMap, Method, StatusCode}, reply};
 use clap::{AppSettings, Clap};
 
@@ -93,7 +93,7 @@ fn get_json() -> BoxedFilter<(IncomingSignal,)> {
 }
 
 async fn handle_signal(signal: IncomingSignal, server: String) -> Result<impl Reply, Infallible> {
-    thread::spawn(|| async move {
+    tokio::spawn(async move {
         info!("[{:?}] Handling signal: {:?}", Local::now(), signal);
         let requests = signal.to_requests();
         info!("[{:?}] Signal results in requests: {:?}", Local::now(), requests);
@@ -109,7 +109,7 @@ async fn handle_signal(signal: IncomingSignal, server: String) -> Result<impl Re
     Ok(StatusCode::OK)
 }
 
-fn entire_api(server: String) -> BoxedFilter<(impl Reply,)>{
+fn entire_api(server: String) -> BoxedFilter<(impl Reply,)> {
     get_json()
         .and_then(move |signal| {
             handle_signal(signal, server.clone())
@@ -305,6 +305,8 @@ mod tests {
             .body(&GOOD_SIGNAL_JSON)
             .filter(&entire_api(server.base_url()))
             .await;
+
+        sleep(Duration::from_secs(12)).await;
 
         assert!(incoming_signal_request.is_ok());
         mock.assert_hits(2);
