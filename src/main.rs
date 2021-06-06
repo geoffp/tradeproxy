@@ -16,7 +16,7 @@ use log::{error, info};
 use outgoing::{OutgoingRequest, deal_and_bot_types::BotType};
 pub use settings::{get_settings, Settings, SETTINGS};
 use tokio::time::{Duration, sleep};
-use std::{collections::HashSet, convert::Infallible,  result::Result};
+use std::{collections::HashSet, convert::Infallible, result::Result, thread};
 use warp::{Filter, Rejection, Reply, filters::BoxedFilter, http::{HeaderMap, Method, StatusCode}, reply};
 use clap::{AppSettings, Clap};
 
@@ -86,23 +86,25 @@ fn get_json() -> BoxedFilter<(IncomingSignal,)> {
         .and(warp::post())
         .and(warp::body::json())
         .map(|signal: IncomingSignal| {
-            info!("Handling signal {:?}...", signal);
+            info!("Got signal {:?}...", signal);
             signal
         })
         .boxed()
 }
 
 async fn handle_signal(signal: IncomingSignal, server: String) -> Result<impl Reply, Infallible> {
-    info!("[{:?}] Got signal: {:?}", Local::now(), signal);
-    let requests = signal.to_requests();
-    info!("[{:?}] Signal results in requests: {:?}", Local::now(), requests);
-    for request in requests {
-        info!("[{:?}] Executing request {:?}...", Local::now(), &request);
-        let er = request.execute_with_server(server.clone()).await;
-        er.log();
-        info!("[{:?}] Sleeping for 5s...", Local::now());
-        sleep(Duration::from_secs(5)).await;
-    }
+    thread::spawn(|| async move {
+        info!("[{:?}] Handling signal: {:?}", Local::now(), signal);
+        let requests = signal.to_requests();
+        info!("[{:?}] Signal results in requests: {:?}", Local::now(), requests);
+        for request in requests {
+            info!("[{:?}] Executing request {:?}...", Local::now(), &request);
+            let er = request.execute_with_server(server.clone()).await;
+            er.log();
+            info!("[{:?}] Sleeping for 5s...", Local::now());
+            sleep(Duration::from_secs(5)).await;
+        }
+    });
     info!("Generating OK result...");
     Ok(StatusCode::OK)
 }
