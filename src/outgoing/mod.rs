@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use reqwest::Client;
 use super::{get_settings, incoming::Action};
 use crate::SETTINGS;
-mod execution_result;
+pub mod execution_result;
 use execution_result::*;
 pub mod deal_and_bot_types;
 use deal_and_bot_types::*;
@@ -11,8 +11,8 @@ use deal_and_bot_types::*;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct OutgoingRequest {
     #[serde(default)]
-    #[serde(skip_serializing_if = "DealAction::is_start")]
-    pub action: DealAction,
+    #[serde(skip_serializing_if = "ActionType::is_start")]
+    pub action: ActionType,
     pub bot_id: u64,
     pub delay_seconds: u64,
     pub email_token: String,
@@ -31,6 +31,14 @@ impl OutgoingRequest {
             delay_seconds: 0,
             action,
         }
+    }
+
+    pub fn start(bot_type: BotType) -> Self {
+        OutgoingRequest::new((ActionType::StartBot, bot_type))
+    }
+
+    pub fn stop(bot_type: BotType) -> Self {
+        OutgoingRequest::new((ActionType::StopBot, bot_type))
     }
 
     /// Executes the action http request!
@@ -64,7 +72,7 @@ mod data_tests {
     #[test]
     fn start_json_is_correct() {
         let request = OutgoingRequest::new((
-            DealAction::Start,
+            ActionType::StartDeal,
             BotType::Long
         ));
         assert_eq!(
@@ -77,7 +85,7 @@ mod data_tests {
     #[test]
     fn close_json_is_correct() {
         let request = OutgoingRequest::new((
-            DealAction::Close,
+            ActionType::CloseDeal,
             BotType::Long
         ));
         assert_eq!(
@@ -117,7 +125,7 @@ mod request_tests {
     #[tokio::test]
     async fn correct_post() {
         use crate::settings::SETTINGS;
-        let good_json = OutgoingRequest::new((DealAction::Start, BotType::Long));
+        let good_json = OutgoingRequest::new((ActionType::StartDeal, BotType::Long));
         // let good_json_str = String::from(CORRECT_LONG_START_JSON);
 
         let server = MockServer::start();

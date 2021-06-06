@@ -2,21 +2,25 @@ use serde::{Serialize, Deserialize};
 use crate::settings::get_settings;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub enum DealAction {
-    Start,
+pub enum ActionType {
+    #[serde(rename = "start_bot")]
+    StartBot,
+    #[serde(rename = "stop_bot")]
+    StopBot,
+    StartDeal,
     #[serde(rename = "close_at_market_price")]
-    Close,
+    CloseDeal,
 }
 
-impl Default for DealAction {
+impl Default for ActionType {
     fn default() -> Self {
-        DealAction::Start
+        ActionType::StartDeal
     }
 }
 
-impl DealAction {
-    pub fn is_start(d: &DealAction) -> bool {
-        matches!(d, DealAction::Start)
+impl ActionType {
+    pub fn is_start(d: &ActionType) -> bool {
+        matches!(d, ActionType::StartDeal)
     }
 }
 

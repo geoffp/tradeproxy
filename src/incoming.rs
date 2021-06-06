@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use super::outgoing::{OutgoingRequest, deal_and_bot_types::{DealAction, BotType}};
+use super::outgoing::{OutgoingRequest, deal_and_bot_types::{ActionType, BotType}};
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
@@ -14,7 +14,7 @@ pub struct IncomingSignal {
     pub contracts: f64,
 }
 
-pub type Action = (DealAction, BotType);
+pub type Action = (ActionType, BotType);
 pub type ActionPair = (Action, Action);
 
 impl IncomingSignal {
@@ -29,18 +29,18 @@ impl IncomingSignal {
 
     fn create_actions(&self) -> ActionPair {
         use BotType::*;
-        use DealAction::*;
+        use ActionType::*;
         use SignalAction::*;
 
         // The order of these is important! Have to close the open deal before we try to open one.
         match self.action {
             Buy => (
-                (Close, Short),
-                (Start, Long),
+                (CloseDeal, Short),
+                (StartDeal, Long),
             ),
             Sell => (
-                (Close, Long),
-                (Start, Short),
+                (CloseDeal, Long),
+                (StartDeal, Short),
             ),
         }
     }

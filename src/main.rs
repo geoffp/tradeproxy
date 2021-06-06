@@ -13,10 +13,29 @@ use chrono::prelude::Local;
 use flexi_logger::{Age, Cleanup, Criterion, Duplicate, LogTarget, Logger, Naming};
 use incoming::IncomingSignal;
 use log::{error, info};
+use outgoing::{OutgoingRequest, deal_and_bot_types::BotType};
 pub use settings::{get_settings, Settings, SETTINGS};
 use tokio::time::{Duration, sleep};
 use std::{collections::HashSet, convert::Infallible,  result::Result};
 use warp::{Filter, Rejection, Reply, filters::BoxedFilter, http::{HeaderMap, Method, StatusCode}, reply};
+use clap::{AppSettings, Clap};
+
+const AUTHORS: &'static str = env!("CARGO_PKG_AUTHORS");
+const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+
+/// Tradeproxy listens for signals to trade and passes them on to 3commas bots.
+#[derive(Clap)]
+#[clap(version = VERSION, author = AUTHORS)]
+#[clap(setting = AppSettings::ColoredHelp)]
+struct Opts {
+    /// Starts both bots and waits for signals. WIthout this option, will just wait for signals.
+    #[clap(long)]
+    start_bots: bool,
+
+    /// Stops both bots and exits.
+    #[clap(long)]
+    stop_bots: bool,
+}
 
 fn get_real_remote_ip(headers: &'_ HeaderMap) -> &str {
     let error_message = "[Remote address unknown]";
@@ -73,16 +92,16 @@ fn get_json() -> BoxedFilter<(IncomingSignal,)> {
         .boxed()
 }
 
-async fn handle_signal(signal: IncomingSignal, server: String) -> Result<impl Reply, Infallible>{
-    info!("Got signal: {:?}", signal);
+async fn handle_signal(signal: IncomingSignal, server: String) -> Result<impl Reply, Infallible> {
+    info!("[{:?}] Got signal: {:?}", Local::now(), signal);
     let requests = signal.to_requests();
-    info!("Signal results in requests: {:?}", requests);
+    info!("[{:?}] Signal results in requests: {:?}", Local::now(), requests);
     for request in requests {
-        info!("Executing request {:?}...", &request);
+        info!("[{:?}] Executing request {:?}...", Local::now(), &request);
         let er = request.execute_with_server(server.clone()).await;
         er.log();
-        // info!("Sleeping for 5s...");
-        // sleep(Duration::from_secs(5)).await;
+        info!("[{:?}] Sleeping for 5s...", Local::now());
+        sleep(Duration::from_secs(5)).await;
     }
     info!("Generating OK result...");
     Ok(StatusCode::OK)
@@ -99,6 +118,7 @@ fn entire_api(server: String) -> BoxedFilter<(impl Reply,)>{
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let opts: Opts = Opts::parse();
     let log_path = &get_settings().log_path;
 
     let logger = Logger::with_str("info")
@@ -112,16 +132,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .duplicate_to_stderr(Duplicate::Info)
         .start()?;
 
-    info!("Tradeproxy starting up! Logging to {}", log_path);
+    info!("Tradeproxy {} starting up! Logging to {}", VERSION, log_path);
+
+    // Should we start or stop the bots?
+    if opts.stop_bots {
+        stop_bots().await;
+        return Ok(());
+    }
+    if opts.start_bots {
+        start_bots().await
+    }
 
     let server = get_settings().request_server.clone();
-
     warp::serve(entire_api(server))
         .run(([0, 0, 0, 0], get_settings().listen_port))
         .await;
 
     logger.shutdown();
     Ok(())
+}
+
+fn both_bots() -> Vec<BotType> {
+    vec![BotType::Long, BotType::Short]
+}
+
+async fn start_bots() {
+    for bot_type in both_bots() {
+        let er = OutgoingRequest::start(bot_type).execute().await;
+        er.log();
+    };
+}
+
+async fn stop_bots() {
+    for bot_type in both_bots() {
+        let er = OutgoingRequest::stop(bot_type).execute().await;
+        er.log();
+    };
 }
 
 async fn handle_error(err: Rejection) -> Result<impl Reply, Infallible> {
