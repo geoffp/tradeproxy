@@ -124,6 +124,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opts: Opts = Opts::parse();
     let log_path = &get_settings().log_path;
 
+    // Start the logger!
     let logger = Logger::with_str("info")
         .log_target(LogTarget::File)
         .directory(log_path)
@@ -137,7 +138,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Tradeproxy {} starting up! Logging to {}", VERSION, log_path);
 
-    // Should we start or stop the bots?
+    // Should we start or stop the 3commas bots?
     if opts.stop_bots {
         stop_bots().await;
         return Ok(());
@@ -146,6 +147,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         start_bots().await
     }
 
+    // Start the server!
     let server = get_settings().request_server.clone();
     warp::serve(entire_api(server))
         .run(([0, 0, 0, 0], get_settings().listen_port))
