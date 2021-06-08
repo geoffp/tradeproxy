@@ -10,8 +10,24 @@ pub enum SignalAction {
 
 #[derive(Deserialize, Debug)]
 pub struct IncomingSignal {
+    // pub action: SignalAction,
+    // pub contracts: f64,
+    pub position_size: String,
+    pub order: IncomingSignalOrder,
+    pub market_position: String,
+    pub market_position_size: String,
+    pub prev_market_position: String,
+    pub prev_market_position_size: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct IncomingSignalOrder {
     pub action: SignalAction,
     pub contracts: f64,
+    pub price: f64,
+    pub id: f64,
+    pub comment: String,
+    pub alert_message: String,
 }
 
 pub type Action = (ActionType, BotType);
@@ -33,7 +49,7 @@ impl IncomingSignal {
         use SignalAction::*;
 
         // The order of these is important! Have to close the open deal before we try to open one.
-        match self.action {
+        match self.order.action {
             Buy => (
                 (CloseDeal, Short),
                 (StartDeal, Long),

@@ -188,7 +188,22 @@ mod tests {
     use super::*;
     use httpmock::MockServer;
     use warp::test::{request, RequestBuilder};
-    const GOOD_SIGNAL_JSON: &str = r#"{"action": "buy", "contracts": 1}"#;
+    const GOOD_SIGNAL_JSON: &str = r#"{
+    "strategy": "fancy v3",
+    "position_size": "0.005",
+    "order": {
+        "action": "buy",
+        "contracts": 1,
+        "price": 0.3,
+        "id": 12345,
+        "comment": "whatev",
+        "alert_message": "hwatev"
+    },
+    "market_position": "long",
+    "market_position_size": "0.003",
+    "prev_market_position": "short",
+    "prev_market_position_size": "0.003"
+}"#;
 
     fn mock_request() -> RequestBuilder {
         request().path("/trade").method("POST")
@@ -222,9 +237,26 @@ mod tests {
 
     #[tokio::test]
     async fn it_accepts_unnecesary_fields_in_json() {
+        const GOOD_BUT_WITH_EXTRA_FIELD: &str = r#"{
+    "strategy": "fancy v3",
+    "position_size": "0.005",
+    "order": {
+        "action": "buy",
+        "contracts": 1,
+        "price": 0.3,
+        "id": 12345,
+        "comment": "whatev",
+        "alert_message": "hwatev"
+    },
+    "market_position": "long",
+    "market_position_size": "0.003",
+    "prev_market_position": "short",
+    "prev_market_position_size": "0.003",
+    "extra": "whoopee!"
+}"#;
         assert!(
             mock_request()
-                .body(r#"{"action": "buy", "contracts": 1, "extra": 42}"#)
+                .body(GOOD_BUT_WITH_EXTRA_FIELD)
                 .matches(&get_json())
                 .await
         );
