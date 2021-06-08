@@ -1,0 +1,15 @@
+{
+  position_size: "{strategy.position_size}",
+  order: {
+    action: "{strategy.order.action}",
+    contracts: "{strategy.order.contracts}",
+    price: "{strategy.order.price}",
+    id: "{strategy.order.id}",
+    comment: "{strategy.order.comment}",
+    alert_message: "{strategy.order.alert_message}",
+  }
+  market_position: "{strategy.market_position}",
+  market_position_size: "{strategy.market_position_size}",
+  prev_market_position: "{strategy.prev_market_position}",
+  prev_market_position_size: "{strategy.prev_market_position_size}",
+}
