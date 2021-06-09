@@ -12,12 +12,12 @@ pub enum SignalAction {
 pub struct IncomingSignal {
     // pub action: SignalAction,
     // pub contracts: f64,
-    pub position_size: String,
+    pub position_size: f64,
     pub order: IncomingSignalOrder,
     pub market_position: String,
-    pub market_position_size: String,
+    pub market_position_size: f64,
     pub prev_market_position: String,
-    pub prev_market_position_size: String,
+    pub prev_market_position_size: f64,
 }
 
 #[derive(Deserialize, Debug)]
@@ -25,7 +25,7 @@ pub struct IncomingSignalOrder {
     pub action: SignalAction,
     pub contracts: f64,
     pub price: f64,
-    pub id: f64,
+    pub id: String,
     pub comment: String,
     pub alert_message: String,
 }
